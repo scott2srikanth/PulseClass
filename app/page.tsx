@@ -12,9 +12,7 @@ type View = "landing" | "login" | "dashboard" | "create" | "host" | "join" | "re
 type Question = { prompt: string; answers: string[]; correct: number; seconds: number };
 
 const starterQuestions: Question[] = [
-  { prompt: "Which data structure follows the LIFO principle?", answers: ["Queue", "Stack", "Linked list", "Binary tree"], correct: 1, seconds: 20 },
-  { prompt: "What does CSS stand for?", answers: ["Computer Style Sheets", "Cascading Style Sheets", "Creative Style System", "Colorful Style Syntax"], correct: 1, seconds: 15 },
-  { prompt: "Which HTTP status code means ‘Not Found’?", answers: ["200", "301", "404", "500"], correct: 2, seconds: 15 },
+  { prompt: "Type your first question here...", answers: ["Option A", "Option B", "Option C", "Option D"], correct: 0, seconds: 20 },
 ];
 
 const nav = [
@@ -53,9 +51,9 @@ export default function PulseClass() {
       <aside className={mobileNav ? "sidebar open" : "sidebar"}>
         <div className="side-top"><Logo /><button className="close-mobile" onClick={() => setMobileNav(false)}><X /></button></div>
         <nav>
-          {nav.map(([id, label, Icon]) => <button key={id} className={view === id || (id === "sessions" && view === "host") || (id === "reports" && view === "report") ? "active" : ""} onClick={() => id === "sessions" ? go("host") : id === "reports" ? go("report") : go("dashboard")}><Icon size={19} /><span>{label}</span>{id === "sessions" && <em>3</em>}</button>)}
+          {nav.map(([id, label, Icon]) => <button key={id} className={view === id || (id === "sessions" && view === "host") || (id === "reports" && view === "report") ? "active" : ""} onClick={() => go("dashboard")}><Icon size={19} /><span>{label}</span></button>)}
         </nav>
-        <div className="side-section"><small>WORKSPACE</small><button><span className="class-dot">WD</span><span>Web Development</span><ChevronDown size={15} /></button></div>
+        <div className="side-section"><small>WORKSPACE</small><button><span className="class-dot">+</span><span>No classes yet</span><ChevronDown size={15} /></button></div>
         <div className="side-tip"><span><Sparkles size={16} /> PRO TIP</span><p>Invite your class and see everyone’s pulse in real time.</p><button>Invite students <ArrowRight size={14} /></button></div>
         <div className="side-bottom"><button><CircleHelp size={19} /> Help & resources</button><button><Settings size={19} /> Settings</button><div className="profile"><Avatar name="Maya Chen" /><div><b>Maya Chen</b><span>maya@northstar.edu</span></div><MoreHorizontal size={18} /></div></div>
       </aside>
@@ -97,28 +95,16 @@ function Header({ onMenu, onJoin }: { onMenu: () => void; onJoin: () => void }) 
 
 function Dashboard({ onCreate, onHost, onReport }: { onCreate: () => void; onHost: () => void; onReport: () => void }) {
   return <div className="page dashboard-page">
-    <div className="welcome"><div><p>MONDAY, AUGUST 3</p><h1>Good morning, Maya <span>👋</span></h1><h2>Ready to get the room buzzing?</h2></div><button className="primary" onClick={onCreate}><Plus size={19} /> Create activity</button></div>
-    <section className="hero-card">
-      <div className="hero-copy"><span className="eyebrow"><i /> LIVE CLASSROOM</span><h3>Turn quiet rooms into<br/><em>active learning.</em></h3><p>Launch a question, hear every voice, and know exactly what to teach next.</p><div><button className="light-button" onClick={onHost}><Play size={18} fill="currentColor" /> Start live session</button><button className="ghost-button" onClick={onCreate}>Build a quiz <ArrowRight size={17} /></button></div></div>
-      <div className="hero-visual"><div className="pulse-orbit one"/><div className="pulse-orbit two"/><div className="question-float"><small>LIVE • Q4 OF 8</small><b>Which hook handles side effects?</b><div><span>useState</span><span className="answer-green">useEffect <Check size={15}/></span></div><footer><i/><i/><i/><i/><i/><i/><i/><i/><i/><i/><i/><i/><b>24 answered</b></footer></div><div className="score-float"><Trophy size={18}/><div><small>LEADER</small><b>Alex R.</b></div><strong>4,820</strong></div></div>
-    </section>
+    <div className="welcome"><div><p>MONDAY, AUGUST 3</p><h1>Welcome to PulseClass, Maya <span>👋</span></h1><h2>Your new teacher workspace is ready.</h2></div><button className="primary" onClick={onCreate}><Plus size={19} /> Create first activity</button></div>
+    <section className="empty-welcome"><div className="empty-spark"><Sparkles/></div><span>YOUR FIRST CLASS STARTS HERE</span><h2>Let’s create something<br/>your students will love.</h2><p>Build a quick quiz, poll, or exit ticket. When you’re ready, share a code and bring everyone into the conversation.</p><button className="primary" onClick={onCreate}><Plus/> Create your first activity</button><div className="first-steps"><div><b>1</b><span><strong>Create</strong><small>Build an activity</small></span></div><i/><div><b>2</b><span><strong>Share</strong><small>Give students a code</small></span></div><i/><div><b>3</b><span><strong>Learn</strong><small>See live understanding</small></span></div></div></section>
     <div className="section-title"><div><h3>At a glance</h3><p>Your classroom activity this week</p></div><button>This week <ChevronDown size={15}/></button></div>
     <div className="stats-grid">
-      <Stat icon={<Zap/>} tone="coral" value="8" label="Sessions run" trend="+24%" />
-      <Stat icon={<Users/>} tone="blue" value="186" label="Students reached" trend="+18%" />
-      <Stat icon={<MessageSquareText/>} tone="mint" value="1,248" label="Responses" trend="+31%" />
-      <Stat icon={<Flame/>} tone="gold" value="82%" label="Avg. engagement" trend="+6%" />
+      <Stat icon={<Zap/>} tone="coral" value="0" label="Sessions run" trend="New" />
+      <Stat icon={<Users/>} tone="blue" value="0" label="Students reached" trend="New" />
+      <Stat icon={<MessageSquareText/>} tone="mint" value="0" label="Responses" trend="New" />
+      <Stat icon={<Flame/>} tone="gold" value="—" label="Avg. engagement" trend="New" />
     </div>
-    <div className="content-grid">
-      <section className="panel recent"><div className="panel-head"><div><h3>Recent sessions</h3><p>Pick up where you left off</p></div><button>View all <ArrowRight size={15}/></button></div>
-        <SessionRow icon="JS" tone="yellow" title="JavaScript Fundamentals" meta="Today, 10:30 AM · 28 students" score="86%" onClick={onReport}/>
-        <SessionRow icon="UX" tone="purple" title="UX Research Methods" meta="Aug 1, 2:00 PM · 22 students" score="78%" onClick={onReport}/>
-        <SessionRow icon="DB" tone="blue" title="Database Design Check-in" meta="Jul 30, 9:00 AM · 31 students" score="91%" onClick={onReport}/>
-      </section>
-      <section className="panel insight"><div className="panel-head"><div><h3>Class pulse</h3><p>Web Development · Last 5 sessions</p></div><button><Ellipsis/></button></div><div className="donut"><div><strong>82%</strong><span>engaged</span></div></div><div className="pulse-legend"><span><i className="mint"/>Answered <b>82%</b></span><span><i className="blue"/>Correct <b>74%</b></span><span><i className="cream"/>No response <b>6%</b></span></div><div className="insight-note"><Sparkles size={17}/><p><b>Nice momentum!</b> Engagement is up 12% since last week.</p></div></section>
-    </div>
-    <div className="section-title library-title"><div><h3>From your library</h3><p>Ready when you are</p></div><button>Explore library <ArrowRight size={15}/></button></div>
-    <div className="quiz-grid"><QuizCard tone="coral" label="QUIZ" title="Intro to React Hooks" details="10 questions · 8 min" plays="Played 6 times" onClick={onHost}/><QuizCard tone="blue" label="POLL" title="Sprint Retrospective" details="6 questions · Anonymous" plays="Played 3 times" onClick={onHost}/><QuizCard tone="mint" label="EXIT TICKET" title="Today’s Learning Check" details="4 questions · 3 min" plays="Played yesterday" onClick={onHost}/><button className="new-quiz" onClick={onCreate}><span><Plus/></span><b>Create something new</b><p>Quiz, poll, word cloud & more</p></button></div>
+    <div className="fresh-grid"><section className="panel fresh-panel"><div className="panel-head"><div><h3>Recent sessions</h3><p>Your completed sessions will appear here</p></div></div><div className="small-empty"><span><Clock3/></span><b>No sessions yet</b><p>Start with your first activity above.</p></div></section><section className="panel fresh-panel"><div className="panel-head"><div><h3>My library</h3><p>Your saved activities</p></div></div><button className="small-empty clickable" onClick={onCreate}><span><Plus/></span><b>Create an activity</b><p>Quiz, poll, word cloud & more</p></button></section></div>
   </div>;
 }
 
