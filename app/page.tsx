@@ -3,12 +3,12 @@
 import { useEffect, useMemo, useState } from "react";
 import {
   ArrowLeft, ArrowRight, BarChart3, Bell, BookOpen, Check, ChevronDown,
-  CircleHelp, Clock3, Copy, Ellipsis, FileText, Flame, Home, LayoutGrid,
-  Library, LogOut, Menu, MessageSquareText, MoreHorizontal, Play, Plus,
-  Search, Settings, Sparkles, Trophy, Users, X, Zap,
+  CircleHelp, Clock3, Copy, Ellipsis, Eye, FileText, Flame, GraduationCap,
+  Home, LayoutGrid, Library, Lock, Mail, Menu, MessageSquareText,
+  MoreHorizontal, Play, Plus, Search, Settings, Sparkles, Trophy, Users, X, Zap,
 } from "lucide-react";
 
-type View = "dashboard" | "create" | "host" | "join" | "report";
+type View = "landing" | "login" | "dashboard" | "create" | "host" | "join" | "report";
 type Question = { prompt: string; answers: string[]; correct: number; seconds: number };
 
 const starterQuestions: Question[] = [
@@ -31,7 +31,7 @@ function Logo({ compact = false }: { compact?: boolean }) {
 }
 
 export default function PulseClass() {
-  const [view, setView] = useState<View>("dashboard");
+  const [view, setView] = useState<View>("landing");
   const [mobileNav, setMobileNav] = useState(false);
   const [questions, setQuestions] = useState<Question[]>(starterQuestions);
   const [activeQuestion, setActiveQuestion] = useState(0);
@@ -44,9 +44,12 @@ export default function PulseClass() {
   useEffect(() => { if (!toast) return; const id = setTimeout(() => setToast(""), 2200); return () => clearTimeout(id); }, [toast]);
   const go = (next: View) => { setView(next); setMobileNav(false); window.scrollTo({ top: 0, behavior: "smooth" }); };
 
+  if (view === "landing") return <Landing onTeacher={() => go("login")} onStudent={() => go("join")} />;
+  if (view === "login") return <TeacherLogin onLogin={() => go("dashboard")} onBack={() => go("landing")} onStudent={() => go("join")} />;
+
   return <main className={`app view-${view}`}>
     {toast && <div className="toast"><Check size={17} />{toast}</div>}
-    {view === "join" ? <StudentView joined={joined} setJoined={setJoined} nickname={nickname} setNickname={setNickname} selected={selectedAnswer} setSelected={setSelectedAnswer} onExit={() => go("dashboard")} /> : <>
+    {view === "join" ? <StudentView joined={joined} setJoined={setJoined} nickname={nickname} setNickname={setNickname} selected={selectedAnswer} setSelected={setSelectedAnswer} onExit={() => { setJoined(false); setSelectedAnswer(null); go("landing"); }} /> : <>
       <aside className={mobileNav ? "sidebar open" : "sidebar"}>
         <div className="side-top"><Logo /><button className="close-mobile" onClick={() => setMobileNav(false)}><X /></button></div>
         <nav>
@@ -65,6 +68,27 @@ export default function PulseClass() {
       </section>
     </>}
   </main>;
+}
+
+function Landing({ onTeacher, onStudent }: { onTeacher: () => void; onStudent: () => void }) {
+  return <main className="marketing">
+    <nav className="marketing-nav"><Logo/><div className="marketing-links"><a href="#features">How it works</a><a href="#features">Features</a><a href="#results">For schools</a></div><div className="marketing-actions"><button className="text-button" onClick={onStudent}>Join a session</button><button className="nav-login" onClick={onTeacher}>Teacher login <ArrowRight size={16}/></button></div></nav>
+    <section className="landing-hero">
+      <div className="landing-copy"><span className="landing-kicker"><i/> BUILT FOR LEARNING THAT MOVES</span><h1>Every voice in<br/>the room. <em>Live.</em></h1><p>Create quizzes, polls, and classroom moments that turn passive listening into active learning—without adding more work to your day.</p><div className="landing-cta"><button className="primary teacher-cta" onClick={onTeacher}><GraduationCap size={19}/> I’m a teacher</button><button className="student-cta" onClick={onStudent}><Users size={19}/> I’m a student</button></div><small><Check size={14}/> Free for teachers <span>•</span> No student accounts needed</small></div>
+      <div className="landing-demo"><div className="demo-glow"/><div className="demo-window"><header><div><i/><i/><i/></div><span>LIVE SESSION · 24 STUDENTS</span><b>18s</b></header><main><small>QUESTION 4 OF 8</small><h2>Which hook handles side effects?</h2><div><span><b>A</b> useState</span><span className="demo-correct"><b>B</b> useEffect <Check size={18}/></span><span><b>C</b> useMemo</span><span><b>D</b> useRef</span></div><footer><i/><i/><i/><i/><i/><i/><i/><i/><i/><i/><i/><i/><strong>24 answered</strong></footer></main></div><div className="demo-float float-left"><span>⚡</span><div><b>96%</b><small>participation</small></div></div><div className="demo-float float-right"><Trophy/><div><small>LEADER</small><b>Alex R. · 4,820</b></div></div></div>
+    </section>
+    <div className="trust-strip"><span>Trusted in classrooms at</span><b>NORTHSTAR</b><b>HORIZON</b><b>BRIGHTON</b><b>WESTFIELD</b><b>CODELAB</b></div>
+    <section className="marketing-features" id="features"><span className="landing-kicker">ONE ROOM. EVERY VOICE.</span><h2>Teaching feels better when<br/>everyone is in it.</h2><div className="feature-cards"><article><span className="feature-icon coral"><Zap/></span><h3>Start in seconds</h3><p>Choose a question, share a code, and watch your room come alive. No downloads or student accounts.</p></article><article><span className="feature-icon blue"><MessageSquareText/></span><h3>Hear the whole room</h3><p>Give every student a safe way to respond—not just the fastest hands or loudest voices.</p></article><article><span className="feature-icon mint"><BarChart3/></span><h3>Know what to teach next</h3><p>See understanding as it happens and leave every session with clear, useful insights.</p></article></div></section>
+    <section className="results-band" id="results"><div><span>THE PULSECLASS EFFECT</span><h2>More participation.<br/>More understanding.</h2></div><div><strong>3.2×</strong><p>more students participate in every class</p></div><div><strong>12 min</strong><p>saved per teacher on average each session</p></div><div><strong>91%</strong><p>of teachers feel more connected to their class</p></div></section>
+    <section className="bottom-cta"><span>✦</span><h2>Ready to feel the difference?</h2><p>Bring your next class to life. It takes less than a minute.</p><button className="primary" onClick={onTeacher}>Start teaching for free <ArrowRight/></button></section>
+    <footer className="marketing-footer"><Logo/><span>© 2026 PulseClass. Made for curious minds.</span><div><button>Privacy</button><button>Terms</button><button>Help center</button></div></footer>
+  </main>;
+}
+
+function TeacherLogin({ onLogin, onBack, onStudent }: { onLogin: () => void; onBack: () => void; onStudent: () => void }) {
+  const [email, setEmail] = useState(""); const [password, setPassword] = useState(""); const [show, setShow] = useState(false); const [error, setError] = useState("");
+  const submit = (e: React.FormEvent) => { e.preventDefault(); if (!email.includes("@") || password.length < 4) { setError("Enter a valid email and at least 4 characters for your password."); return; } onLogin(); };
+  return <main className="login-page"><button className="login-brand" onClick={onBack}><Logo/></button><section className="login-story"><div><span className="landing-kicker"><i/> TEACH WITH THE WHOLE ROOM</span><h1>Your classroom is<br/>waiting to <em>light up.</em></h1><p>Run live activities, involve every student, and see understanding take shape in real time.</p><div className="login-quote"><div className="quote-avatars"><Avatar name="AR" tone="coral"/><Avatar name="LK" tone="blue"/><Avatar name="SM" tone="mint"/></div><blockquote>“I finally hear from students who never used to raise their hands.”</blockquote><small>— Maya Chen, Computer Science</small></div></div><div className="story-orbit o1"/><div className="story-orbit o2"/></section><section className="login-form-wrap"><form className="login-form" onSubmit={submit}><span className="form-badge"><GraduationCap/></span><h2>Welcome back</h2><p>Sign in to your teacher workspace.</p><button type="button" className="google-button"><b>G</b> Continue with Google</button><div className="or"><span/>or continue with email<span/></div><label>Email address<div><Mail/><input type="email" value={email} onChange={e=>setEmail(e.target.value)} placeholder="you@school.edu"/></div></label><label>Password<div><Lock/><input type={show?"text":"password"} value={password} onChange={e=>setPassword(e.target.value)} placeholder="Enter your password"/><button type="button" onClick={()=>setShow(!show)} aria-label="Show password"><Eye/></button></div></label><div className="form-options"><label><input type="checkbox"/> Keep me signed in</label><button type="button">Forgot password?</button></div>{error&&<p className="form-error">{error}</p>}<button className="primary login-submit" type="submit">Sign in to PulseClass <ArrowRight/></button><p className="signup-note">New to PulseClass? <button type="button" onClick={onLogin}>Create a free teacher account</button></p><div className="student-divider"/><button type="button" className="student-login-link" onClick={onStudent}><Users/> Joining a class? <b>Enter your session code</b><ArrowRight/></button></form></section></main>;
 }
 
 function Header({ onMenu, onJoin }: { onMenu: () => void; onJoin: () => void }) {
