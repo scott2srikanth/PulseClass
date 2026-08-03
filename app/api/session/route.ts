@@ -1,11 +1,13 @@
 type Participant = { name: string; roll: string };
 type LiveQuestion = { prompt: string; answers: string[]; correct: number; seconds: number };
+type SavedReport = { id:string; title:string; className:string; createdAt:number; participants:Participant[]; scores:Record<string,number>; classScores:Record<string,{name:string;roll:string;points:number}> };
 type SessionState = {
   lobbyOpen: boolean;
   live: boolean;
   title: string;
   className: string;
   questions: LiveQuestion[];
+  activityPoints: number;
   current: number;
   participants: Participant[];
   responses: Record<string, number>;
@@ -14,6 +16,7 @@ type SessionState = {
   overallScores: Record<string, Record<string, { name:string; roll:string; points:number }>>;
   timerEnd: number;
   finished: boolean;
+  reports: SavedReport[];
   updatedAt: number;
 };
 
@@ -21,12 +24,13 @@ const root = globalThis as typeof globalThis & { __pulseClassSession?: SessionSt
 
 function session() {
   if (!root.__pulseClassSession) root.__pulseClassSession = {
-    lobbyOpen: false, live: false, title: "", className: "", questions: [],
+    lobbyOpen: false, live: false, title: "", className: "", questions: [], activityPoints:1000,
     current: 0, participants: [], responses: {}, scores: {}, results: [], overallScores: {}, timerEnd: 0,
-    finished: false, updatedAt: Date.now(),
+    finished: false, reports:[], updatedAt: Date.now(),
   };
   root.__pulseClassSession.results ||= [];
   root.__pulseClassSession.overallScores ||= {};
+  root.__pulseClassSession.reports ||= [];
   return root.__pulseClassSession;
 }
 
@@ -34,7 +38,8 @@ function gradeCurrent(state:SessionState) {
   const correct = state.questions[state.current]?.correct;
   for (const participant of state.participants) {
     const key = String(participant.roll || participant.name).toLowerCase();
-    state.scores[key] = (state.scores[key] || 0) + (state.responses[key] === correct ? 1000 : 0);
+    const questionPoints = Math.round(state.activityPoints / Math.max(1,state.questions.length));
+    state.scores[key] = (state.scores[key] || 0) + (state.responses[key] === correct ? questionPoints : 0);
   }
 }
 
@@ -45,7 +50,7 @@ export async function GET() {
 export async function POST(request: Request) {
   const body = await request.json();
   const state = session();
-  if (body.action === "open") Object.assign(state, { lobbyOpen:true, live:false, title:body.title||"Live activity", className:body.className||"", questions:body.questions||[], current:0, responses:{}, scores:{}, results:[], timerEnd:0, finished:false });
+  if (body.action === "open") Object.assign(state, { lobbyOpen:true, live:false, title:body.title||"Live activity", className:body.className||"", questions:body.questions||[], activityPoints:Number(body.activityPoints||1000), current:0, responses:{}, scores:{}, results:[], timerEnd:0, finished:false });
   if (body.action === "start") { state.live = true; state.finished = false; state.timerEnd = Date.now() + (state.questions[state.current]?.seconds || 20) * 1000; }
   if (body.action === "question") { gradeCurrent(state); state.current = Number(body.current || 0); state.responses = {}; state.timerEnd = Date.now() + (state.questions[state.current]?.seconds || 20) * 1000; }
   if (body.action === "connect") {
@@ -66,6 +71,7 @@ export async function POST(request: Request) {
       const prior = classScores[key]?.points || 0;
       classScores[key] = { ...participant, points:prior + (state.scores[key] || 0) };
     }
+    state.reports.unshift({id:`report-${Date.now()}`,title:state.title,className:state.className,createdAt:Date.now(),participants:[...state.participants],scores:{...state.scores},classScores:{...classScores}});
     state.live = false; state.finished = true; state.timerEnd = 0;
   }
   if (body.action === "close") Object.assign(state, { lobbyOpen:false, live:false, participants:[], current:0, responses:{}, timerEnd:0 });
