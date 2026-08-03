@@ -1,5 +1,7 @@
 @import "tailwindcss";
 
+.session-validation-error{margin:9px 0 0!important;padding:9px 10px;border:1px solid #ffc8c1;border-radius:8px;background:#fff0ed;color:#a83c34!important;font-size:9px!important;line-height:1.4}.quick-join .primary:disabled{opacity:.55;cursor:not-allowed}html[data-theme="dark"] .session-validation-error{background:#3b2026;border-color:#663039;color:#ffb6ac!important}
+
 /* Keep live response rows fully visible on short projector viewports. */
 .host-screen>header{flex:0 0 65px}.host-screen>section{min-height:0;overflow-y:auto;overflow-x:hidden}.host-screen>footer{flex:0 0 70px}.host-screen .host-answers,.host-screen .response-count{flex-shrink:0}.host-screen .live-response-roster{flex:0 0 auto;min-height:98px}.host-screen .live-response-roster>header{flex:0 0 auto}.host-screen .live-response-roster>div{min-height:58px;flex:0 0 auto}.host-screen .live-response-roster>div>span{min-height:42px}
 
