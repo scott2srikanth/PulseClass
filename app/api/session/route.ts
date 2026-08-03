@@ -1,5 +1,7 @@
 type Participant = { name: string; roll: string };
 type LiveQuestion = { prompt: string; answers: string[]; correct: number; seconds: number };
+type SharedClass = { id:string; name:string };
+type SharedActivity = { id:string; title:string; classId:string; questions:LiveQuestion[]; points?:number; presenterEnabled?:boolean };
 type SavedReport = { id:string; title:string; className:string; createdAt:number; participants:Participant[]; scores:Record<string,number>; classScores:Record<string,{name:string;roll:string;points:number}> };
 type SessionState = {
   lobbyOpen: boolean;
@@ -17,6 +19,9 @@ type SessionState = {
   timerEnd: number;
   finished: boolean;
   reports: SavedReport[];
+  catalogClasses: SharedClass[];
+  catalogActivities: SharedActivity[];
+  catalogUpdatedAt: number;
   updatedAt: number;
 };
 
@@ -26,11 +31,14 @@ function session() {
   if (!root.__pulseClassSession) root.__pulseClassSession = {
     lobbyOpen: false, live: false, title: "", className: "", questions: [], activityPoints:1000,
     current: 0, participants: [], responses: {}, scores: {}, results: [], overallScores: {}, timerEnd: 0,
-    finished: false, reports:[], updatedAt: Date.now(),
+    finished: false, reports:[], catalogClasses:[], catalogActivities:[], catalogUpdatedAt:0, updatedAt: Date.now(),
   };
   root.__pulseClassSession.results ||= [];
   root.__pulseClassSession.overallScores ||= {};
   root.__pulseClassSession.reports ||= [];
+  root.__pulseClassSession.catalogClasses ||= [];
+  root.__pulseClassSession.catalogActivities ||= [];
+  root.__pulseClassSession.catalogUpdatedAt ||= 0;
   return root.__pulseClassSession;
 }
 
@@ -50,6 +58,7 @@ export async function GET() {
 export async function POST(request: Request) {
   const body = await request.json();
   const state = session();
+  if (body.action === "catalog") { state.catalogClasses = Array.isArray(body.classes)?body.classes:[]; state.catalogActivities = Array.isArray(body.activities)?body.activities:[]; state.catalogUpdatedAt = Date.now(); }
   if (body.action === "open") Object.assign(state, { lobbyOpen:true, live:false, title:body.title||"Live activity", className:body.className||"", questions:body.questions||[], activityPoints:Number(body.activityPoints||1000), current:0, responses:{}, scores:{}, results:[], timerEnd:0, finished:false });
   if (body.action === "start") { state.live = true; state.finished = false; state.timerEnd = Date.now() + (state.questions[state.current]?.seconds || 20) * 1000; }
   if (body.action === "question") { gradeCurrent(state); state.current = Number(body.current || 0); state.responses = {}; state.timerEnd = Date.now() + (state.questions[state.current]?.seconds || 20) * 1000; }
