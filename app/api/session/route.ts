@@ -7,6 +7,7 @@ type SessionState = {
   lobbyOpen: boolean;
   live: boolean;
   title: string;
+  sessionCode: string;
   className: string;
   questions: LiveQuestion[];
   activityPoints: number;
@@ -29,7 +30,7 @@ const root = globalThis as typeof globalThis & { __pulseClassSession?: SessionSt
 
 function session() {
   if (!root.__pulseClassSession) root.__pulseClassSession = {
-    lobbyOpen: false, live: false, title: "", className: "", questions: [], activityPoints:1000,
+    lobbyOpen: false, live: false, title: "", sessionCode:"482938", className: "", questions: [], activityPoints:1000,
     current: 0, participants: [], responses: {}, scores: {}, results: [], overallScores: {}, timerEnd: 0,
     finished: false, reports:[], catalogClasses:[], catalogActivities:[], catalogUpdatedAt:0, updatedAt: Date.now(),
   };
@@ -39,6 +40,7 @@ function session() {
   root.__pulseClassSession.catalogClasses ||= [];
   root.__pulseClassSession.catalogActivities ||= [];
   root.__pulseClassSession.catalogUpdatedAt ||= 0;
+  root.__pulseClassSession.sessionCode ||= "482938";
   return root.__pulseClassSession;
 }
 
@@ -59,7 +61,7 @@ export async function POST(request: Request) {
   const body = await request.json();
   const state = session();
   if (body.action === "catalog") { state.catalogClasses = Array.isArray(body.classes)?body.classes:[]; state.catalogActivities = Array.isArray(body.activities)?body.activities:[]; state.catalogUpdatedAt = Date.now(); }
-  if (body.action === "open") Object.assign(state, { lobbyOpen:true, live:false, title:body.title||"Live activity", className:body.className||"", questions:body.questions||[], activityPoints:Number(body.activityPoints||1000), current:0, responses:{}, scores:{}, results:[], timerEnd:0, finished:false });
+  if (body.action === "open") Object.assign(state, { lobbyOpen:true, live:false, title:body.title||"Live activity", sessionCode:String(body.sessionCode||"482938"), className:body.className||"", questions:body.questions||[], activityPoints:Number(body.activityPoints||1000), current:0, responses:{}, scores:{}, results:[], timerEnd:0, finished:false });
   if (body.action === "start") { state.live = true; state.finished = false; state.timerEnd = Date.now() + (state.questions[state.current]?.seconds || 20) * 1000; }
   if (body.action === "question") { gradeCurrent(state); state.current = Number(body.current || 0); state.responses = {}; state.timerEnd = Date.now() + (state.questions[state.current]?.seconds || 20) * 1000; }
   if (body.action === "connect") {
