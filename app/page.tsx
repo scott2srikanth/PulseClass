@@ -63,6 +63,16 @@ export default function PulseClass() {
   const editActivity=(activity:ActivityRecord)=>{const cls=classes.find(c=>c.id===activity.classId);setActiveClassId(activity.classId);setClassName(cls?.name||"");setEditingActivityId(activity.id);setActivityTitle(activity.title);setQuestions(activity.questions);go("create");};
   const presentSaved=(activity?:ActivityRecord)=>{if(activity){const cls=classes.find(c=>c.id===activity.classId);setActiveClassId(activity.classId);setClassName(cls?.name||"");setActivityTitle(activity.title);setQuestions(activity.questions);}presentActivity();};
   const connectStudent = () => { setStudentConnected(true); const next={name:nickname.trim(),roll:rollNumber.trim()}; setStudents(current=>{const filtered=current.filter(s=>(next.roll?s.roll!==next.roll:s.name.toLowerCase()!==next.name.toLowerCase()));const updated=[...filtered,next];window.localStorage.setItem("pulseclass-students",JSON.stringify(updated));return updated;}); };
+  const activeClass = classes.find(c => c.id === activeClassId) || classes[0];
+  const activeClassActivities = activities.filter(a => a.classId === activeClass?.id);
+  const readyActivities = activities.filter(a => a.questions.length > 0 && a.questions.every(q => q.prompt.trim() && !q.prompt.startsWith("Type your")));
+  const workspaceTip = !classes.length
+    ? { label:"WORKSPACE SETUP", text:"Create your first class to organise activities and student participation.", action:"Create a class", run:()=>go("classes") }
+    : !activities.length
+      ? { label:"BUILD YOUR LIBRARY", text:`Add the first learning activity to ${activeClass?.name}.`, action:"Add an activity", run:()=>openCreate(activeClass?.id) }
+      : !readyActivities.length
+        ? { label:"FINISH YOUR DRAFT", text:"Complete every question prompt so your activity is ready to present.", action:"Open library", run:()=>go("library") }
+        : { label:"READY WHEN YOU ARE", text:`“${readyActivities[0].title}” is complete and ready for students.`, action:"Present now", run:()=>presentSaved(readyActivities[0]) };
 
   if (view === "landing") return <Landing onTeacher={() => go("login")} onStudent={() => {setStudentFromHost(false);go("join")}} />;
   if (view === "login") return <TeacherLogin onLogin={() => go("dashboard")} onBack={() => go("landing")} onStudent={() => {setStudentFromHost(false);go("join")}} />;
@@ -75,8 +85,14 @@ export default function PulseClass() {
         <nav>
           {nav.map(([id, label, Icon]) => <button key={id} className={view === id || (id === "sessions" && view === "host") || (id === "reports" && view === "report") ? "active" : ""} onClick={() => go(id as View)}><Icon size={19} /><span>{label}</span></button>)}
         </nav>
-        <div className="side-section"><small>WORKSPACE · {classes.length}</small><button onClick={() => go("classes")}><span className="class-dot">{className?className.slice(0,2).toUpperCase():'+'}</span><span>{className||'No classes yet'}</span><ChevronDown size={15} /></button></div>
-        <div className="side-tip"><span><Sparkles size={16} /> PRO TIP</span><p>Create a class first, then invite students with a simple join code.</p><button onClick={() => go("classes")}>Create a class <ArrowRight size={14} /></button></div>
+        <div className="side-workspace">
+          <div className="workspace-label"><small>WORKSPACE</small><button onClick={() => go("classes")}>Manage</button></div>
+          {activeClass ? <div className="workspace-card">
+            <div className="workspace-class"><span className="class-dot">{activeClass.name.slice(0,2).toUpperCase()}</span><label><small>ACTIVE CLASS</small><select aria-label="Active class" value={activeClass.id} onChange={e=>{const cls=classes.find(c=>c.id===e.target.value);if(cls){setActiveClassId(cls.id);setClassName(cls.name);}}}>{classes.map(c=><option key={c.id} value={c.id}>{c.name}</option>)}</select></label><ChevronDown size={14}/></div>
+            <div className="workspace-metrics"><button onClick={()=>go("library")}><b>{activeClassActivities.length}</b><span>Activities</span></button><button onClick={()=>go("students")}><b>{students.length}</b><span>Students</span></button><button onClick={()=>go("classes")}><b>{classes.length}</b><span>Classes</span></button></div>
+          </div> : <button className="workspace-empty" onClick={()=>go("classes")}><span className="class-dot">+</span><span><b>Set up workspace</b><small>Create your first class</small></span><ArrowRight size={14}/></button>}
+        </div>
+        <div className={`side-tip ${readyActivities.length ? "tip-ready" : ""}`}><span><Sparkles size={16} /> {workspaceTip.label}</span><p>{workspaceTip.text}</p><button onClick={workspaceTip.run}>{workspaceTip.action} <ArrowRight size={14} /></button></div>
         <div className="side-bottom"><button className={view === "help" ? "active" : ""} onClick={() => go("help")}><CircleHelp size={19} /> Help & resources</button><button className={view === "settings" ? "active" : ""} onClick={() => go("settings")}><Settings size={19} /> Settings</button><div className="profile"><Avatar name="Srikanth Reddy" /><div><b>Srikanth Reddy</b><span>teacher@pulseclass.test</span></div><button className="profile-logout" onClick={() => go("landing")} aria-label="Sign out"><LogOut size={17}/></button></div></div>
       </aside>
       <section className="workspace">
