@@ -25,6 +25,21 @@ interface ExecutionContext {
   passThroughOnException(): void;
 }
 
+async function fetchDurableObject(stub: DurableObjectStub, request: Request): Promise<Response> {
+  try {
+    return await stub.fetch(request);
+  } catch (error) {
+    const durableError = error as { overloaded?: boolean; retryable?: boolean };
+    if (durableError.overloaded || durableError.retryable) {
+      return Response.json(
+        { error: "This room is busy. Reconnecting automatically.", retryAfter: 3 },
+        { status: 503, headers: { "Retry-After": "3", "Cache-Control": "no-store" } },
+      );
+    }
+    throw error;
+  }
+}
+
 // Image security config. SVG sources with .svg extension auto-skip the
 // optimization endpoint on the client side (served directly, no proxy).
 // To route SVGs through the optimizer (with security headers), set
@@ -36,8 +51,9 @@ const worker = {
     const url = new URL(request.url);
 
     if (url.pathname === "/api/catalog" || url.pathname === "/api/catalog/ws") {
-      const id = env.WORKSPACE_CATALOG.idFromName("pulseclass-workspace");
-      return env.WORKSPACE_CATALOG.get(id).fetch(request);
+      const workspace = (url.searchParams.get("workspace") || "srikanth-reddy").replace(/[^a-z0-9-]/gi, "").slice(0, 64);
+      const id = env.WORKSPACE_CATALOG.idFromName(`workspace:${workspace}`);
+      return fetchDurableObject(env.WORKSPACE_CATALOG.get(id), request);
     }
 
     if (url.pathname === "/api/session" || url.pathname === "/api/session/ws") {
@@ -50,7 +66,7 @@ const worker = {
         return Response.json({ error: "A valid six-digit session code is required." }, { status: 400 });
       }
       const id = env.CLASSROOM_SESSIONS.idFromName(`session:${code}`);
-      return env.CLASSROOM_SESSIONS.get(id).fetch(request);
+      return fetchDurableObject(env.CLASSROOM_SESSIONS.get(id, { locationHint: "apac" }), request);
     }
 
     if (url.pathname === "/_vinext/image") {

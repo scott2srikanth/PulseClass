@@ -37,6 +37,7 @@ export type SessionState = {
   finished: boolean;
   gradedQuestions: number[];
   answerVersions: Record<string, number>;
+  revision: number;
   updatedAt: number;
 };
 
@@ -47,7 +48,9 @@ const MAX_STUDENTS = 400;
 const MAX_MESSAGE_BYTES = 16 * 1024;
 const MAX_STUDENT_MESSAGES_PER_SECOND = 20;
 const SLOW_CLIENT_BUFFER_BYTES = 512 * 1024;
-const HOST_BATCH_MS = 150;
+const HOST_BATCH_MS = 100;
+const HOST_BATCH_COUNT = 50;
+const RESULT_RETENTION_MS = 60 * 60 * 1000;
 
 const emptyState = (sessionCode = "") : SessionState => ({
   lobbyOpen: false,
@@ -66,6 +69,7 @@ const emptyState = (sessionCode = "") : SessionState => ({
   finished: false,
   gradedQuestions: [],
   answerVersions: {},
+  revision: 0,
   updatedAt: Date.now(),
 });
 
@@ -77,6 +81,8 @@ export class ClassroomSession {
   private ready: Promise<void>;
   private session: SessionState = emptyState();
   private answerFlushScheduled = false;
+  private hostPendingEvents = 0;
+  private hostFlushTimer?: ReturnType<typeof setTimeout>;
 
   constructor(state: DurableObjectState) {
     this.state = state;
@@ -84,6 +90,7 @@ export class ClassroomSession {
       this.session = (await this.state.storage.get<SessionState>("session")) || emptyState();
       this.session.gradedQuestions ||= [];
       this.session.answerVersions ||= {};
+      this.session.revision ||= 0;
     });
   }
 
@@ -147,8 +154,12 @@ export class ClassroomSession {
       }
       socket.serializeAttachment(attachment);
       const action = JSON.parse(raw);
-      const allowed = attachment.role === "student" ? ["answer", "connect"] : ["open", "start", "question", "extend", "finish", "close"];
+      const allowed = attachment.role === "student" ? ["answer", "connect", "sync"] : ["open", "start", "question", "extend", "finish", "close", "sync"];
       if (!allowed.includes(String(action.action || ""))) throw new Error("Action not allowed for this role");
+      if (action.action === "sync") {
+        socket.send(JSON.stringify({ type: "session:snapshot", state: this.publicState(attachment.role) }));
+        return;
+      }
       if (attachment?.role === "student") {
         action.name ||= this.session.participants.find(item => participantKey(item) === attachment.key)?.name;
         action.roll ||= this.session.participants.find(item => participantKey(item) === attachment.key)?.roll;
@@ -176,6 +187,16 @@ export class ClassroomSession {
 
   async webSocketError(socket: WebSocket): Promise<void> {
     socket.close(1011, "Connection error");
+  }
+
+  async alarm(): Promise<void> {
+    await this.ready;
+    if (!this.session.finished || Date.now() - this.session.updatedAt < RESULT_RETENTION_MS) {
+      if (this.session.finished) await this.state.storage.setAlarm(this.session.updatedAt + RESULT_RETENTION_MS);
+      return;
+    }
+    this.session = emptyState(this.session.sessionCode);
+    await this.persist();
   }
 
   private publicState(role: "student" | "host") {
@@ -214,6 +235,7 @@ export class ClassroomSession {
   private async applyAction(body: SessionAction) {
     const action = body.action;
     if (action === "open") {
+      await this.state.storage.deleteAlarm();
       this.session = {
         ...emptyState(String(body.sessionCode || "")),
         lobbyOpen: true,
@@ -268,12 +290,14 @@ export class ClassroomSession {
       this.session.live = false;
       this.session.finished = true;
       this.session.timerEnd = 0;
+      await this.state.storage.setAlarm(Date.now() + RESULT_RETENTION_MS);
     }
     if (action === "close") {
       this.session.lobbyOpen = false;
       this.session.live = false;
       this.session.timerEnd = 0;
     }
+    if (["open", "start", "question", "extend", "finish", "close"].includes(String(action))) this.session.revision += 1;
     this.session.updatedAt = Date.now();
     await this.persist();
     if (action === "connect") this.scheduleHostFlush();
@@ -296,6 +320,7 @@ export class ClassroomSession {
       responses: this.session.responses,
       responseCount: Object.keys(this.session.responses).length,
       health: this.roomHealth(),
+      revision: this.session.revision,
       updatedAt: this.session.updatedAt,
     };
   }
@@ -312,12 +337,25 @@ export class ClassroomSession {
   }
 
   private scheduleHostFlush() {
+    this.hostPendingEvents += 1;
+    if (this.hostPendingEvents >= HOST_BATCH_COUNT) {
+      if (this.hostFlushTimer) clearTimeout(this.hostFlushTimer);
+      this.hostFlushTimer = undefined;
+      this.answerFlushScheduled = false;
+      void this.flushHosts();
+      return;
+    }
     if (this.answerFlushScheduled) return;
     this.answerFlushScheduled = true;
-    setTimeout(() => {
-      this.answerFlushScheduled = false;
-      void this.persist().then(() => this.broadcastHosts("responses:update", this.hostRealtimePatch()));
-    }, HOST_BATCH_MS);
+    this.hostFlushTimer = setTimeout(() => void this.flushHosts(), HOST_BATCH_MS);
+  }
+
+  private async flushHosts() {
+    this.answerFlushScheduled = false;
+    this.hostFlushTimer = undefined;
+    this.hostPendingEvents = 0;
+    await this.persist();
+    await this.broadcastHosts("responses:update", this.hostRealtimePatch());
   }
 
   private safeSend(socket: WebSocket, message: string, critical = false) {
@@ -336,7 +374,7 @@ export class ClassroomSession {
   }
 
   private async broadcastPatch(patch: Record<string, unknown>) {
-    const message = JSON.stringify({ type: "session:update", patch });
+    const message = JSON.stringify({ type: "session:update", revision: this.session.revision, patch });
     for (const socket of this.state.getWebSockets()) this.safeSend(socket, message, true);
   }
 
@@ -350,14 +388,14 @@ export class ClassroomSession {
   }
 
   private async broadcastFinished() {
-    const hostMessage = JSON.stringify({ type: "activity:finished", patch: {
+    const hostMessage = JSON.stringify({ type: "activity:finished", revision: this.session.revision, patch: {
       live: false, finished: true, timerEnd: 0, scores: this.session.scores, results: this.session.results,
     } });
     for (const socket of this.state.getWebSockets()) {
       const attachment = socket.deserializeAttachment() as SocketAttachment | null;
       if (attachment?.role === "student") {
         const points = this.session.scores[attachment.key || ""] || 0;
-        this.safeSend(socket, JSON.stringify({ type: "activity:finished", patch: { live: false, finished: true, timerEnd: 0, points } }), true);
+        this.safeSend(socket, JSON.stringify({ type: "activity:finished", revision: this.session.revision, patch: { live: false, finished: true, timerEnd: 0, points } }), true);
       } else this.safeSend(socket, hostMessage, true);
     }
   }

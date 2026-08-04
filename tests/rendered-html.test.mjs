@@ -39,7 +39,11 @@ test("uses durable rooms and event-driven browser synchronization", async () => 
   assert.match(session, /acceptWebSocket/);
   assert.match(session, /state\.storage\.put\("session"/);
   assert.match(session, /Date\.now\(\) <= this\.session\.timerEnd/);
-  assert.match(session, /HOST_BATCH_MS = 150/);
+  assert.match(session, /HOST_BATCH_MS = 100/);
+  assert.match(session, /HOST_BATCH_COUNT = 50/);
+  assert.match(session, /RESULT_RETENTION_MS/);
+  assert.match(session, /async alarm/);
+  assert.match(session, /revision/);
   assert.match(session, /MAX_STUDENTS = 400/);
   assert.match(session, /MAX_STUDENT_MESSAGES_PER_SECOND/);
   assert.match(session, /Action not allowed for this role/);
@@ -49,5 +53,9 @@ test("uses durable rooms and event-driven browser synchronization", async () => 
   assert.match(catalog, /state\.storage\.put\("catalog"/);
   assert.match(page, /new WebSocket/);
   assert.match(page, /sessionReconnectRef/);
+  assert.match(page, /Room health: Excellent/);
+  assert.match(worker, /locationHint: "apac"/);
+  assert.match(worker, /workspace:\$\{workspace\}/);
+  assert.match(worker, /Retry-After/);
   assert.doesNotMatch(page, /setInterval\(poll/);
 });
