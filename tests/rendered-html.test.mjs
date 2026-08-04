@@ -66,6 +66,12 @@ test("uses durable rooms and event-driven browser synchronization", async () => 
   assert.match(page, /difficulty/);
   assert.match(page, /Never assign more than 100 points/);
   assert.match(page, /Every question must have between 0 and 100 points/);
+  assert.match(page, /DIFFICULTY DISTRIBUTION/);
+  assert.match(page, /All easy/);
+  assert.match(page, /Easy and medium/);
+  assert.match(page, /Mixed: easy, medium and hard/);
+  assert.match(page, /Print result/);
+  assert.match(page, /vertical-chart/);
   assert.match(worker, /locationHint: "apac"/);
   assert.match(worker, /workspace:\$\{workspace\}/);
   assert.match(worker, /Retry-After/);
