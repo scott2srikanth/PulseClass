@@ -1,5 +1,5 @@
 export type Participant = { name: string; roll: string };
-export type LiveQuestion = { prompt: string; answers: string[]; correct: number; seconds: number; type?: "text"|"code"|"image"; language?:string; code?:string; imageUrl?:string; imagePrompt?:string; alt?:string };
+export type LiveQuestion = { prompt: string; answers: string[]; correct: number; seconds: number; points?:number; difficulty?:"easy"|"medium"|"hard"; type?: "text"|"code"|"image"; language?:string; code?:string; imageUrl?:string; imagePrompt?:string; alt?:string };
 export type SharedClass = { id: string; name: string };
 export type SharedActivity = {
   id: string;
@@ -221,9 +221,9 @@ export class ClassroomSession {
   private gradeCurrent() {
     if (this.session.gradedQuestions.includes(this.session.current)) return;
     const correct = this.session.questions[this.session.current]?.correct;
-    const questionPoints = Math.round(
+    const questionPoints = Math.max(0, Number(this.session.questions[this.session.current]?.points) || Math.round(
       this.session.activityPoints / Math.max(1, this.session.questions.length),
-    );
+    ));
     for (const participant of this.session.participants) {
       const key = participantKey(participant);
       this.session.scores[key] =

@@ -48,6 +48,7 @@ test("uses durable rooms and event-driven browser synchronization", async () => 
   assert.match(session, /MAX_STUDENT_MESSAGES_PER_SECOND/);
   assert.match(session, /Action not allowed for this role/);
   assert.match(session, /answerVersions/);
+  assert.match(session, /questions\[this\.session\.current\]\?\.points/);
   assert.match(session, /responses:update/);
   assert.match(session, /bufferedAmount/);
   assert.match(catalog, /state\.storage\.put\("catalog"/);
@@ -58,6 +59,8 @@ test("uses durable rooms and event-driven browser synchronization", async () => 
   assert.match(page, /Image identification/);
   assert.match(page, /imagePrompt/);
   assert.match(page, /QuestionMedia/);
+  assert.match(page, /Question points/);
+  assert.match(page, /difficulty/);
   assert.match(worker, /locationHint: "apac"/);
   assert.match(worker, /workspace:\$\{workspace\}/);
   assert.match(worker, /Retry-After/);
