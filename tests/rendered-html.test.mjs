@@ -49,6 +49,7 @@ test("uses durable rooms and event-driven browser synchronization", async () => 
   assert.match(session, /Action not allowed for this role/);
   assert.match(session, /answerVersions/);
   assert.match(session, /questions\[this\.session\.current\]\?\.points/);
+  assert.match(session, /Math\.min\(100/);
   assert.match(session, /imageReadyCounts/);
   assert.match(session, /"ready"/);
   assert.match(session, /responses:update/);
@@ -63,6 +64,8 @@ test("uses durable rooms and event-driven browser synchronization", async () => 
   assert.match(page, /QuestionMedia/);
   assert.match(page, /Question points/);
   assert.match(page, /difficulty/);
+  assert.match(page, /Never assign more than 100 points/);
+  assert.match(page, /Every question must have between 0 and 100 points/);
   assert.match(worker, /locationHint: "apac"/);
   assert.match(worker, /workspace:\$\{workspace\}/);
   assert.match(worker, /Retry-After/);

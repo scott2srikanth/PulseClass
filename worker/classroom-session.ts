@@ -60,7 +60,7 @@ const emptyState = (sessionCode = "") : SessionState => ({
   sessionCode,
   className: "",
   questions: [],
-  activityPoints: 1000,
+  activityPoints: 100,
   current: 0,
   participants: [],
   responses: {},
@@ -225,9 +225,9 @@ export class ClassroomSession {
   private gradeCurrent() {
     if (this.session.gradedQuestions.includes(this.session.current)) return;
     const correct = this.session.questions[this.session.current]?.correct;
-    const questionPoints = Math.max(0, Number(this.session.questions[this.session.current]?.points) || Math.round(
+    const questionPoints = Math.min(100, Math.max(0, Number(this.session.questions[this.session.current]?.points) || Math.round(
       this.session.activityPoints / Math.max(1, this.session.questions.length),
-    ));
+    )));
     for (const participant of this.session.participants) {
       const key = participantKey(participant);
       this.session.scores[key] =
@@ -246,7 +246,7 @@ export class ClassroomSession {
         title: String(body.title || "Live activity"),
         className: String(body.className || ""),
         questions: Array.isArray(body.questions) ? body.questions as LiveQuestion[] : [],
-        activityPoints: Number(body.activityPoints || 1000),
+        activityPoints: Number(body.activityPoints || 100),
       };
     }
     if (action === "start" && this.session.lobbyOpen) {
