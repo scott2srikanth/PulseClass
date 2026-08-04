@@ -35,11 +35,19 @@ export type SessionState = {
   results: Participant[];
   timerEnd: number;
   finished: boolean;
+  gradedQuestions: number[];
+  answerVersions: Record<string, number>;
   updatedAt: number;
 };
 
-type SocketAttachment = { role: "student" | "host"; key?: string };
+type SocketAttachment = { role: "student" | "host"; key?: string; windowStartedAt?: number; messageCount?: number };
 type SessionAction = Record<string, unknown> & { action?: string };
+
+const MAX_STUDENTS = 400;
+const MAX_MESSAGE_BYTES = 16 * 1024;
+const MAX_STUDENT_MESSAGES_PER_SECOND = 20;
+const SLOW_CLIENT_BUFFER_BYTES = 512 * 1024;
+const HOST_BATCH_MS = 150;
 
 const emptyState = (sessionCode = "") : SessionState => ({
   lobbyOpen: false,
@@ -56,6 +64,8 @@ const emptyState = (sessionCode = "") : SessionState => ({
   results: [],
   timerEnd: 0,
   finished: false,
+  gradedQuestions: [],
+  answerVersions: {},
   updatedAt: Date.now(),
 });
 
@@ -66,11 +76,14 @@ export class ClassroomSession {
   private state: DurableObjectState;
   private ready: Promise<void>;
   private session: SessionState = emptyState();
+  private answerFlushScheduled = false;
 
   constructor(state: DurableObjectState) {
     this.state = state;
     this.ready = this.state.blockConcurrencyWhile(async () => {
       this.session = (await this.state.storage.get<SessionState>("session")) || emptyState();
+      this.session.gradedQuestions ||= [];
+      this.session.answerVersions ||= {};
     });
   }
 
@@ -89,13 +102,17 @@ export class ClassroomSession {
       if (role === "student" && name) {
         const participant = { name, roll };
         attachment.key = participantKey(participant);
+        const isReturning = this.session.participants.some(item => participantKey(item) === attachment.key);
+        if (!isReturning && this.session.participants.length >= MAX_STUDENTS) {
+          return Response.json({ error: "This session has reached its student limit." }, { status: 429 });
+        }
         await this.connectParticipant(participant);
       }
 
       this.state.acceptWebSocket(server);
       server.serializeAttachment(attachment);
       server.send(JSON.stringify({ type: "session:snapshot", state: this.publicState(role) }));
-      await this.broadcast(true);
+      this.scheduleHostFlush();
       return new Response(null, { status: 101, webSocket: client });
     }
 
@@ -114,13 +131,37 @@ export class ClassroomSession {
 
   async webSocketMessage(socket: WebSocket, message: string | ArrayBuffer): Promise<void> {
     try {
-      const action = JSON.parse(typeof message === "string" ? message : new TextDecoder().decode(message));
+      const raw = typeof message === "string" ? message : new TextDecoder().decode(message);
+      if (raw.length > MAX_MESSAGE_BYTES) throw new Error("Message too large");
       const attachment = socket.deserializeAttachment() as SocketAttachment | null;
+      if (!attachment) throw new Error("Missing connection identity");
+      const now = Date.now();
+      if (!attachment.windowStartedAt || now - attachment.windowStartedAt >= 1000) {
+        attachment.windowStartedAt = now;
+        attachment.messageCount = 0;
+      }
+      attachment.messageCount = (attachment.messageCount || 0) + 1;
+      if (attachment.role === "student" && attachment.messageCount > MAX_STUDENT_MESSAGES_PER_SECOND) {
+        socket.send(JSON.stringify({ type: "session:error", message: "Too many updates. Please slow down." }));
+        return;
+      }
+      socket.serializeAttachment(attachment);
+      const action = JSON.parse(raw);
+      const allowed = attachment.role === "student" ? ["answer", "connect"] : ["open", "start", "question", "extend", "finish", "close"];
+      if (!allowed.includes(String(action.action || ""))) throw new Error("Action not allowed for this role");
       if (attachment?.role === "student") {
         action.name ||= this.session.participants.find(item => participantKey(item) === attachment.key)?.name;
         action.roll ||= this.session.participants.find(item => participantKey(item) === attachment.key)?.roll;
       }
-      await this.applyAction(action);
+      const accepted = await this.applyAction(action);
+      if (attachment.role === "student" && action.action === "answer") {
+        socket.send(JSON.stringify({
+          type: accepted ? "answer:accepted" : "answer:rejected",
+          question: this.session.current,
+          answer: Number(action.answer),
+          eventId: action.eventId,
+        }));
+      }
     } catch {
       socket.send(JSON.stringify({ type: "session:error", message: "Invalid session message" }));
     }
@@ -130,7 +171,7 @@ export class ClassroomSession {
     socket.close(code, reason);
     // Participants remain members of the room so a refresh or temporary network
     // failure never removes them from the teacher's roster.
-    await this.broadcast(true);
+    this.scheduleHostFlush();
   }
 
   async webSocketError(socket: WebSocket): Promise<void> {
@@ -154,10 +195,10 @@ export class ClassroomSession {
       ...this.session.participants.filter(item => participantKey(item) !== key),
       participant,
     ];
-    await this.persist();
   }
 
   private gradeCurrent() {
+    if (this.session.gradedQuestions.includes(this.session.current)) return;
     const correct = this.session.questions[this.session.current]?.correct;
     const questionPoints = Math.round(
       this.session.activityPoints / Math.max(1, this.session.questions.length),
@@ -167,6 +208,7 @@ export class ClassroomSession {
       this.session.scores[key] =
         (this.session.scores[key] || 0) + (this.session.responses[key] === correct ? questionPoints : 0);
     }
+    this.session.gradedQuestions.push(this.session.current);
   }
 
   private async applyAction(body: SessionAction) {
@@ -187,16 +229,35 @@ export class ClassroomSession {
       this.session.timerEnd = Date.now() + (this.session.questions[this.session.current]?.seconds || 20) * 1000;
     }
     if (action === "question" && this.session.live) {
+      const target = Math.max(0, Math.min(Number(body.current || 0), this.session.questions.length - 1));
+      if (target === this.session.current) return true;
+      if (target !== this.session.current + 1) return false;
       this.gradeCurrent();
-      this.session.current = Math.max(0, Math.min(Number(body.current || 0), this.session.questions.length - 1));
+      this.session.current = target;
       this.session.responses = {};
       this.session.timerEnd = Date.now() + (this.session.questions[this.session.current]?.seconds || 20) * 1000;
     }
     if (action === "connect") {
-      await this.connectParticipant({ name: String(body.name || "Student"), roll: String(body.roll || "") });
+      const participant = { name: String(body.name || "Student").trim().slice(0, 80), roll: String(body.roll || "").trim().slice(0, 40) };
+      const key = participantKey(participant);
+      const isReturning = this.session.participants.some(item => participantKey(item) === key);
+      if (!isReturning && this.session.participants.length >= MAX_STUDENTS) return false;
+      await this.connectParticipant(participant);
     }
     if (action === "answer" && this.session.live && Date.now() <= this.session.timerEnd) {
-      this.session.responses[participantKey({ name: String(body.name || ""), roll: String(body.roll || "") })] = Number(body.answer);
+      const question = Number(body.question ?? this.session.current);
+      if (question !== this.session.current || this.session.gradedQuestions.includes(question)) return false;
+      const answer = Number(body.answer);
+      if (!Number.isInteger(answer) || answer < 0 || answer >= (this.session.questions[question]?.answers.length || 0)) return false;
+      const key = participantKey({ name: String(body.name || ""), roll: String(body.roll || "") });
+      if (!this.session.participants.some(item => participantKey(item) === key)) return false;
+      const version = Number(body.version || 0);
+      if (version && version <= (this.session.answerVersions[key] || 0)) return false;
+      this.session.responses[key] = answer;
+      if (version) this.session.answerVersions[key] = version;
+      this.session.updatedAt = Date.now();
+      this.scheduleHostFlush();
+      return true;
     }
     if (action === "extend" && this.session.live) {
       this.session.timerEnd = Math.max(Date.now(), this.session.timerEnd) + 10_000;
@@ -215,25 +276,89 @@ export class ClassroomSession {
     }
     this.session.updatedAt = Date.now();
     await this.persist();
-    await this.broadcast(action === "connect" || action === "answer");
+    if (action === "connect") this.scheduleHostFlush();
+    if (action === "open") await this.broadcastAll("session:snapshot");
+    if (action === "start") await this.broadcastPatch({ live: true, finished: false, timerEnd: this.session.timerEnd, current: this.session.current });
+    if (action === "question") await this.broadcastPatch({ current: this.session.current, responses: {}, timerEnd: this.session.timerEnd });
+    if (action === "extend") await this.broadcastPatch({ timerEnd: this.session.timerEnd });
+    if (action === "finish") await this.broadcastFinished();
+    if (action === "close") await this.broadcastPatch({ lobbyOpen: false, live: false, timerEnd: 0 });
+    return true;
   }
 
   private async persist() {
     await this.state.storage.put("session", this.session);
   }
 
-  private async broadcast(hostsOnly = false) {
-    const hostMessage = JSON.stringify({ type: "session:snapshot", state: this.publicState("host") });
-    const studentMessage = hostsOnly ? "" : JSON.stringify({ type: "session:snapshot", state: this.publicState("student") });
+  private hostRealtimePatch() {
+    return {
+      participants: this.session.participants,
+      responses: this.session.responses,
+      responseCount: Object.keys(this.session.responses).length,
+      health: this.roomHealth(),
+      updatedAt: this.session.updatedAt,
+    };
+  }
+
+  private roomHealth() {
+    let studentsOnline = 0;
+    let hostsOnline = 0;
     for (const socket of this.state.getWebSockets()) {
-      try {
-        const attachment = socket.deserializeAttachment() as SocketAttachment | null;
-        if (attachment?.role === "student") {
-          if (!hostsOnly) socket.send(studentMessage);
-        } else socket.send(hostMessage);
-      } catch {
-        // A socket can close between getWebSockets() and send().
-      }
+      const attachment = socket.deserializeAttachment() as SocketAttachment | null;
+      if (attachment?.role === "student") studentsOnline += 1;
+      else hostsOnline += 1;
+    }
+    return { studentsOnline, hostsOnline, registeredStudents: this.session.participants.length };
+  }
+
+  private scheduleHostFlush() {
+    if (this.answerFlushScheduled) return;
+    this.answerFlushScheduled = true;
+    setTimeout(() => {
+      this.answerFlushScheduled = false;
+      void this.persist().then(() => this.broadcastHosts("responses:update", this.hostRealtimePatch()));
+    }, HOST_BATCH_MS);
+  }
+
+  private safeSend(socket: WebSocket, message: string, critical = false) {
+    try {
+      if (!critical && "bufferedAmount" in socket && Number(socket.bufferedAmount) > SLOW_CLIENT_BUFFER_BYTES) return;
+      socket.send(message);
+    } catch { /* socket closed during send */ }
+  }
+
+  private async broadcastHosts(type: string, patch: Record<string, unknown>) {
+    const message = JSON.stringify({ type, patch });
+    for (const socket of this.state.getWebSockets()) {
+      const attachment = socket.deserializeAttachment() as SocketAttachment | null;
+      if (attachment?.role !== "student") this.safeSend(socket, message);
+    }
+  }
+
+  private async broadcastPatch(patch: Record<string, unknown>) {
+    const message = JSON.stringify({ type: "session:update", patch });
+    for (const socket of this.state.getWebSockets()) this.safeSend(socket, message, true);
+  }
+
+  private async broadcastAll(type: string) {
+    const hostMessage = JSON.stringify({ type, state: this.publicState("host") });
+    const studentMessage = JSON.stringify({ type, state: this.publicState("student") });
+    for (const socket of this.state.getWebSockets()) {
+      const attachment = socket.deserializeAttachment() as SocketAttachment | null;
+      this.safeSend(socket, attachment?.role === "student" ? studentMessage : hostMessage, true);
+    }
+  }
+
+  private async broadcastFinished() {
+    const hostMessage = JSON.stringify({ type: "activity:finished", patch: {
+      live: false, finished: true, timerEnd: 0, scores: this.session.scores, results: this.session.results,
+    } });
+    for (const socket of this.state.getWebSockets()) {
+      const attachment = socket.deserializeAttachment() as SocketAttachment | null;
+      if (attachment?.role === "student") {
+        const points = this.session.scores[attachment.key || ""] || 0;
+        this.safeSend(socket, JSON.stringify({ type: "activity:finished", patch: { live: false, finished: true, timerEnd: 0, points } }), true);
+      } else this.safeSend(socket, hostMessage, true);
     }
   }
 }

@@ -39,6 +39,13 @@ test("uses durable rooms and event-driven browser synchronization", async () => 
   assert.match(session, /acceptWebSocket/);
   assert.match(session, /state\.storage\.put\("session"/);
   assert.match(session, /Date\.now\(\) <= this\.session\.timerEnd/);
+  assert.match(session, /HOST_BATCH_MS = 150/);
+  assert.match(session, /MAX_STUDENTS = 400/);
+  assert.match(session, /MAX_STUDENT_MESSAGES_PER_SECOND/);
+  assert.match(session, /Action not allowed for this role/);
+  assert.match(session, /answerVersions/);
+  assert.match(session, /responses:update/);
+  assert.match(session, /bufferedAmount/);
   assert.match(catalog, /state\.storage\.put\("catalog"/);
   assert.match(page, /new WebSocket/);
   assert.match(page, /sessionReconnectRef/);
