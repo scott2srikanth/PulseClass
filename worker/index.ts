@@ -9,6 +9,7 @@ export { ClassroomSession, WorkspaceCatalog };
 interface Env {
   ASSETS: Fetcher;
   DB: D1Database;
+  QUIZ_IMAGES: R2Bucket;
   CLASSROOM_SESSIONS: DurableObjectNamespace<ClassroomSession>;
   WORKSPACE_CATALOG: DurableObjectNamespace<WorkspaceCatalog>;
   IMAGES: {
@@ -49,6 +50,31 @@ async function fetchDurableObject(stub: DurableObjectStub, request: Request): Pr
 const worker = {
   async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
     const url = new URL(request.url);
+
+    if (url.pathname === "/api/images" && request.method === "POST") {
+      const contentType = request.headers.get("content-type") || "";
+      const size = Number(request.headers.get("content-length") || 0);
+      if (!contentType.startsWith("image/") || contentType === "image/svg+xml") return Response.json({ error: "Upload a PNG, JPEG, WebP, or AVIF image." }, { status: 415 });
+      if (size > 1024 * 1024) return Response.json({ error: "The optimized image must be smaller than 1 MB." }, { status: 413 });
+      const bytes = await request.arrayBuffer();
+      if (!bytes.byteLength || bytes.byteLength > 1024 * 1024) return Response.json({ error: "The optimized image must be smaller than 1 MB." }, { status: 413 });
+      const extension = contentType.includes("avif") ? "avif" : contentType.includes("webp") ? "webp" : contentType.includes("png") ? "png" : "jpg";
+      const key = `quiz/${crypto.randomUUID()}.${extension}`;
+      await env.QUIZ_IMAGES.put(key, bytes, { httpMetadata: { contentType, cacheControl: "public, max-age=31536000, immutable" } });
+      return Response.json({ url: `${url.origin}/api/images/${key}` });
+    }
+
+    if (url.pathname.startsWith("/api/images/") && request.method === "GET") {
+      const key = url.pathname.slice("/api/images/".length);
+      if (!/^quiz\/[a-z0-9-]+\.(webp|avif|png|jpg)$/.test(key)) return new Response("Not found", { status: 404 });
+      const object = await env.QUIZ_IMAGES.get(key);
+      if (!object) return new Response("Not found", { status: 404 });
+      const headers = new Headers();
+      object.writeHttpMetadata(headers);
+      headers.set("Cache-Control", "public, max-age=31536000, immutable");
+      headers.set("ETag", object.httpEtag);
+      return new Response(object.body, { headers });
+    }
 
     if (url.pathname === "/api/catalog" || url.pathname === "/api/catalog/ws") {
       const workspace = (url.searchParams.get("workspace") || "srikanth-reddy").replace(/[^a-z0-9-]/gi, "").slice(0, 64);

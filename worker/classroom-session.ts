@@ -37,6 +37,7 @@ export type SessionState = {
   finished: boolean;
   gradedQuestions: number[];
   answerVersions: Record<string, number>;
+  imageReady: Record<string, number[]>;
   revision: number;
   updatedAt: number;
 };
@@ -69,6 +70,7 @@ const emptyState = (sessionCode = "") : SessionState => ({
   finished: false,
   gradedQuestions: [],
   answerVersions: {},
+  imageReady: {},
   revision: 0,
   updatedAt: Date.now(),
 });
@@ -90,6 +92,7 @@ export class ClassroomSession {
       this.session = (await this.state.storage.get<SessionState>("session")) || emptyState();
       this.session.gradedQuestions ||= [];
       this.session.answerVersions ||= {};
+      this.session.imageReady ||= {};
       this.session.revision ||= 0;
     });
   }
@@ -154,7 +157,7 @@ export class ClassroomSession {
       }
       socket.serializeAttachment(attachment);
       const action = JSON.parse(raw);
-      const allowed = attachment.role === "student" ? ["answer", "connect", "sync"] : ["open", "start", "question", "extend", "finish", "close", "sync"];
+      const allowed = attachment.role === "student" ? ["answer", "connect", "ready", "sync"] : ["open", "start", "question", "extend", "finish", "close", "sync"];
       if (!allowed.includes(String(action.action || ""))) throw new Error("Action not allowed for this role");
       if (action.action === "sync") {
         socket.send(JSON.stringify({ type: "session:snapshot", state: this.publicState(attachment.role) }));
@@ -204,6 +207,7 @@ export class ClassroomSession {
     return {
       ...this.session,
       responses: {},
+      imageReady: {},
       scores: this.session.finished ? this.session.scores : {},
       participants: [],
       results: this.session.finished ? this.session.results : [],
@@ -266,6 +270,12 @@ export class ClassroomSession {
       if (!isReturning && this.session.participants.length >= MAX_STUDENTS) return false;
       await this.connectParticipant(participant);
     }
+    if (action === "ready") {
+      const key = participantKey({ name: String(body.name || ""), roll: String(body.roll || "") });
+      const question = Math.max(0, Number(body.current || 0));
+      const ready = this.session.imageReady[key] || [];
+      if (!ready.includes(question)) this.session.imageReady[key] = [...ready, question];
+    }
     if (action === "answer" && this.session.live && Date.now() <= this.session.timerEnd) {
       const question = Number(body.question ?? this.session.current);
       if (question !== this.session.current || this.session.gradedQuestions.includes(question)) return false;
@@ -300,7 +310,7 @@ export class ClassroomSession {
     if (["open", "start", "question", "extend", "finish", "close"].includes(String(action))) this.session.revision += 1;
     this.session.updatedAt = Date.now();
     await this.persist();
-    if (action === "connect") this.scheduleHostFlush();
+    if (action === "connect" || action === "ready") this.scheduleHostFlush();
     if (action === "open") await this.broadcastAll("session:snapshot");
     if (action === "start") await this.broadcastPatch({ live: true, finished: false, timerEnd: this.session.timerEnd, current: this.session.current });
     if (action === "question") await this.broadcastPatch({ current: this.session.current, responses: {}, timerEnd: this.session.timerEnd });
@@ -320,6 +330,7 @@ export class ClassroomSession {
       responses: this.session.responses,
       responseCount: Object.keys(this.session.responses).length,
       health: this.roomHealth(),
+      imageReadyCounts: this.session.questions.map((_, index) => Object.values(this.session.imageReady).filter(items => items.includes(index)).length),
       revision: this.session.revision,
       updatedAt: this.session.updatedAt,
     };
