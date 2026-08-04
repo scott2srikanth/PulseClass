@@ -1,5 +1,5 @@
 export type Participant = { name: string; roll: string };
-export type LiveQuestion = { prompt: string; answers: string[]; correct: number; seconds: number };
+export type LiveQuestion = { prompt: string; answers: string[]; correct: number; seconds: number; type?: "text"|"code"|"image"; language?:string; code?:string; imageUrl?:string; imagePrompt?:string; alt?:string };
 export type SharedClass = { id: string; name: string };
 export type SharedActivity = {
   id: string;

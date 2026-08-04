@@ -54,6 +54,10 @@ test("uses durable rooms and event-driven browser synchronization", async () => 
   assert.match(page, /new WebSocket/);
   assert.match(page, /sessionReconnectRef/);
   assert.match(page, /Room health: Excellent/);
+  assert.match(page, /Code reading/);
+  assert.match(page, /Image identification/);
+  assert.match(page, /imagePrompt/);
+  assert.match(page, /QuestionMedia/);
   assert.match(worker, /locationHint: "apac"/);
   assert.match(worker, /workspace:\$\{workspace\}/);
   assert.match(worker, /Retry-After/);
