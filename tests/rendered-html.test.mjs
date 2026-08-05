@@ -62,6 +62,9 @@ test("uses durable rooms and event-driven browser synchronization", async () => 
   assert.match(page, /Image identification/);
   assert.match(page, /imagePrompt/);
   assert.match(page, /QuestionMedia/);
+  assert.match(page, /questionPresentationReady/);
+  assert.match(page, /Upload required before presenting/);
+  assert.match(page, /Add and save an image/);
   assert.match(page, /Question points/);
   assert.match(page, /difficulty/);
   assert.match(page, /Never assign more than 100 points/);
