@@ -96,6 +96,10 @@ test("uses durable rooms and event-driven browser synchronization", async () => 
   assert.match(page, /targetBytes: 48 \* 1024/);
   assert.match(page, /targetBytes: 96 \* 1024/);
   assert.match(page, /Maximum compression/);
+  assert.match(page, /High quality/);
+  assert.match(page, /PNG text clarity/);
+  assert.match(page, /image\/png/);
+  assert.match(page, /targetBytes: 440 \* 1024/);
   assert.match(page, /Rename class/);
   assert.match(page, /onRenameActivity/);
   assert.match(page, /Activity renamed/);

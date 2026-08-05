@@ -4005,19 +4005,24 @@ function AIActivityBuilder({
   );
 }
 
-type ImageCompressionMode = "balanced" | "maximum";
+type ImageCompressionMode = "balanced" | "maximum" | "high-quality";
+type ImageOutputFormat = "webp" | "png";
 
 async function optimizeQuizImage(
   file: File,
   mode: ImageCompressionMode,
+  format: ImageOutputFormat,
 ): Promise<Blob> {
   if (!file.type.startsWith("image/") || file.type === "image/svg+xml")
     throw new Error("Choose a PNG, JPEG, WebP, or AVIF image.");
   const bitmap = await createImageBitmap(file);
-  const profile =
-    mode === "maximum"
+  const profile = format === "png"
+    ? { width: 1200, height: 800, targetBytes: 440 * 1024 }
+    : mode === "maximum"
       ? { width: 800, height: 600, targetBytes: 48 * 1024 }
-      : { width: 1000, height: 700, targetBytes: 96 * 1024 };
+      : mode === "high-quality"
+        ? { width: 1200, height: 800, targetBytes: 440 * 1024 }
+        : { width: 1000, height: 700, targetBytes: 96 * 1024 };
   const initialScale = Math.min(
     1,
     profile.width / bitmap.width,
@@ -4038,13 +4043,16 @@ async function optimizeQuizImage(
     context.fillStyle = "#ffffff";
     context.fillRect(0, 0, canvas.width, canvas.height);
     context.drawImage(bitmap, 0, 0, canvas.width, canvas.height);
-    const qualities =
-      mode === "maximum"
+    const qualities = format === "png"
+      ? [undefined]
+      : mode === "maximum"
         ? [0.68, 0.58, 0.48, 0.4, 0.32]
-        : [0.78, 0.7, 0.62, 0.54, 0.46];
+        : mode === "high-quality"
+          ? [0.88, 0.82, 0.76, 0.7, 0.62]
+          : [0.78, 0.7, 0.62, 0.54, 0.46];
     for (const quality of qualities) {
       blob = await new Promise<Blob | null>((resolve) =>
-        canvas.toBlob(resolve, "image/webp", quality),
+        canvas.toBlob(resolve, format === "png" ? "image/png" : "image/webp", quality),
       );
       if (blob && blob.size <= targetBytes) {
         bitmap.close();
@@ -4088,6 +4096,7 @@ function CreateQuiz({
   >("");
   const [compressionMode, setCompressionMode] =
     useState<ImageCompressionMode>("balanced");
+  const [imageFormat, setImageFormat] = useState<ImageOutputFormat>("webp");
   useEffect(() => {
     const input =
       document.querySelector<HTMLInputElement>(".builder-bar input");
@@ -4103,7 +4112,7 @@ function CreateQuiz({
     if (!file) return;
     try {
       setImageUpload("optimizing");
-      const blob = await optimizeQuizImage(file, compressionMode);
+      const blob = await optimizeQuizImage(file, compressionMode, imageFormat);
       setImageUpload("uploading");
       const response = await fetch("/api/images", {
         method: "POST",
@@ -4114,7 +4123,7 @@ function CreateQuiz({
       if (!response.ok) throw new Error(data.error || "Upload failed.");
       update({ imageUrl: data.url });
       notify(
-        `Image optimized to ${Math.round(blob.size / 1024)} KB with ${compressionMode === "maximum" ? "maximum" : "balanced"} compression and uploaded`,
+        `Image optimized to ${Math.round(blob.size / 1024)} KB ${imageFormat.toUpperCase()} and uploaded`,
       );
     } catch (error) {
       notify(error instanceof Error ? error.message : "Image upload failed.");
@@ -4241,7 +4250,18 @@ function CreateQuiz({
                   </span>
                 </div>
               )}
-              <fieldset className="compression-mode">
+              <fieldset className="compression-mode format-mode">
+                <legend>OUTPUT FORMAT</legend>
+                <button type="button" className={imageFormat === "webp" ? "selected" : ""} onClick={() => setImageFormat("webp")}>
+                  <span><b>WebP</b><small>Smallest downloads for photographs and mixed images</small></span>
+                  {imageFormat === "webp" && <Check />}
+                </button>
+                <button type="button" className={imageFormat === "png" ? "selected" : ""} onClick={() => setImageFormat("png")}>
+                  <span><b>PNG</b><small>Sharper text, diagrams and flat-colour graphics</small></span>
+                  {imageFormat === "png" && <Check />}
+                </button>
+              </fieldset>
+              {imageFormat === "webp" && <fieldset className="compression-mode webp-quality-mode">
                 <legend>IMAGE COMPRESSION</legend>
                 <button
                   type="button"
@@ -4259,7 +4279,16 @@ function CreateQuiz({
                   <span><b>Maximum compression</b><small>Large classes or slow networks · under 50 KB</small></span>
                   {compressionMode === "maximum" && <Check />}
                 </button>
-              </fieldset>
+                <button
+                  type="button"
+                  className={compressionMode === "high-quality" ? "selected" : ""}
+                  onClick={() => setCompressionMode("high-quality")}
+                >
+                  <span><b>High quality</b><small>Detailed images · under 450 KB</small></span>
+                  {compressionMode === "high-quality" && <Check />}
+                </button>
+              </fieldset>}
+              {imageFormat === "png" && <div className="png-format-note"><FileText/><span><b>PNG text clarity</b><small>PNG is lossless. PulseClass preserves sharp edges and reduces dimensions only when required to remain below 450 KB.</small></span></div>}
               <label className="image-upload">
                 UPLOAD IMAGE
                 <input
@@ -4276,7 +4305,9 @@ function CreateQuiz({
                     ? "Optimizing image…"
                     : imageUpload === "uploading"
                       ? "Uploading to secure storage…"
-                      : `Choose image · ${compressionMode === "maximum" ? "under 50 KB" : "under 100 KB"} WebP`}
+                      : imageFormat === "png"
+                        ? "Choose image · lossless PNG under 450 KB"
+                        : `Choose image · ${compressionMode === "maximum" ? "under 50 KB" : compressionMode === "high-quality" ? "under 450 KB" : "under 100 KB"} WebP`}
                 </span>
               </label>
               <label>
