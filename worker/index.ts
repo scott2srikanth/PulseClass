@@ -25,6 +25,7 @@ interface Env {
 const IMAGE_MAX_BYTES = 450 * 1024;
 const TEACHER_USER = "teacher@pulseclass.test";
 const TEACHER_PASSWORD = "Pulse@2026";
+const uploadAuthSecret=(request:Request,env:Env)=>env.UPLOAD_AUTH_SECRET||`pulseclass:${new URL(request.url).hostname}:${TEACHER_PASSWORD}:upload-session-v1`;
 
 function bytesToHex(bytes: ArrayBuffer) {
   return [...new Uint8Array(bytes)].map(byte => byte.toString(16).padStart(2, "0")).join("");
@@ -36,7 +37,7 @@ async function signTeacherSession(expires:string, secret:string) {
 }
 
 async function isTeacherRequest(request:Request, env:Env) {
-  const secret=env.UPLOAD_AUTH_SECRET||(new URL(request.url).hostname==="localhost"?"pulseclass-local-development-only":"");if(!secret)return false;
+  const secret=uploadAuthSecret(request,env);
   const token=request.headers.get("cookie")?.match(/(?:^|;\s*)pc_teacher=([^;]+)/)?.[1];
   if(!token)return false;
   const [expires,signature]=token.split(".");
@@ -87,7 +88,7 @@ const worker = {
     const url = new URL(request.url);
 
     if (url.pathname === "/api/auth/teacher" && request.method === "POST") {
-      const secret=env.UPLOAD_AUTH_SECRET||(url.hostname==="localhost"?"pulseclass-local-development-only":"");if(!secret)return Response.json({error:"Teacher uploads are not configured."},{status:503});
+      const secret=uploadAuthSecret(request,env);
       const body=await request.json<{username?:string;password?:string}>().catch(()=>({}));
       if(body.username?.trim().toLowerCase()!==TEACHER_USER||body.password!==TEACHER_PASSWORD)return Response.json({error:"The username or password is incorrect."},{status:401});
       const expires=String(Date.now()+12*60*60*1000);const signature=await signTeacherSession(expires,secret);const secure=url.protocol==="https:"?" Secure;":"";

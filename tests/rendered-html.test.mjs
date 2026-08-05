@@ -78,6 +78,8 @@ test("uses durable rooms and event-driven browser synchronization", async () => 
   assert.match(worker, /QUIZ_IMAGES\.put/);
   assert.match(worker, /max-age=31536000, immutable/);
   assert.match(worker, /UPLOAD_AUTH_SECRET/);
+  assert.match(worker, /uploadAuthSecret/);
+  assert.doesNotMatch(worker, /Teacher uploads are not configured/);
   assert.match(worker, /pc_teacher/);
   assert.match(worker, /withinUploadLimit/);
   assert.match(worker, /crypto\.subtle\.digest\("SHA-256",bytes\)/);
