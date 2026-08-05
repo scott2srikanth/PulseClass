@@ -90,5 +90,8 @@ test("uses durable rooms and event-driven browser synchronization", async () => 
   assert.match(page, /450\*1024/);
   assert.match(page, /cleanupStoredImages/);
   assert.match(page, /onImageReady/);
+  assert.match(page, /You can start now/);
+  assert.doesNotMatch(page, /disabled=\{currentImageWaiting>0\}/);
+  assert.doesNotMatch(page, /disabled=\{!last&&nextImageWaiting>0\}/);
   assert.doesNotMatch(page, /setInterval\(poll/);
 });
