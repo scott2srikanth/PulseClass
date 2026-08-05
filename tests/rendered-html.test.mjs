@@ -93,7 +93,8 @@ test("uses durable rooms and event-driven browser synchronization", async () => 
   assert.match(worker, /caches\.default\.match/);
   assert.match(worker, /QUIZ_IMAGES\.delete/);
   assert.match(page, /optimizeQuizImage/);
-  assert.match(page, /450\*1024/);
+  assert.match(page, /targetBytes=440\*1024/);
+  assert.match(page, /dimensionScale\*=\.82/);
   assert.match(page, /cleanupStoredImages/);
   assert.match(page, /onImageReady/);
   assert.match(page, /You can start now/);

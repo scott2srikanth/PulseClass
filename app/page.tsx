@@ -313,8 +313,10 @@ function AIActivityBuilder({className,onBack,onCreate}:{className:string;onBack:
 
 async function optimizeQuizImage(file:File):Promise<Blob>{
   if(!file.type.startsWith("image/")||file.type==="image/svg+xml")throw new Error("Choose a PNG, JPEG, WebP, or AVIF image.");
-  const bitmap=await createImageBitmap(file);const scale=Math.min(1,1200/bitmap.width,800/bitmap.height);const canvas=document.createElement("canvas");canvas.width=Math.max(1,Math.round(bitmap.width*scale));canvas.height=Math.max(1,Math.round(bitmap.height*scale));const context=canvas.getContext("2d");if(!context)throw new Error("This browser could not optimize the image.");context.drawImage(bitmap,0,0,canvas.width,canvas.height);bitmap.close();
-  const encode=(quality:number)=>new Promise<Blob|null>(resolve=>canvas.toBlob(resolve,"image/webp",quality));let blob:Blob|null=null;for(const quality of [.76,.68,.6,.52]){blob=await encode(quality);if(blob&&blob.size<=450*1024)break}if(!blob)throw new Error("This image could not be optimized.");if(blob.size>450*1024)throw new Error("The optimized image is still larger than 450 KB. Choose a simpler or smaller image.");return blob;
+  const bitmap=await createImageBitmap(file);const initialScale=Math.min(1,1200/bitmap.width,800/bitmap.height);const canvas=document.createElement("canvas");const context=canvas.getContext("2d",{alpha:false});if(!context){bitmap.close();throw new Error("This browser could not optimize the image.");}
+  const targetBytes=440*1024;let blob:Blob|null=null;let dimensionScale=initialScale;
+  for(let pass=0;pass<8;pass+=1){canvas.width=Math.max(1,Math.round(bitmap.width*dimensionScale));canvas.height=Math.max(1,Math.round(bitmap.height*dimensionScale));context.fillStyle="#ffffff";context.fillRect(0,0,canvas.width,canvas.height);context.drawImage(bitmap,0,0,canvas.width,canvas.height);for(const quality of [.78,.68,.58,.48,.4]){blob=await new Promise<Blob|null>(resolve=>canvas.toBlob(resolve,"image/webp",quality));if(blob&&blob.size<=targetBytes){bitmap.close();return blob;}}dimensionScale*=.82;}
+  bitmap.close();if(!blob)throw new Error("This image could not be optimized.");throw new Error("This image contains too much detail to compress safely. Try a cropped version.");
 }
 
 function CreateQuiz({ title, points, setPoints, questions, setQuestions, onBack, onSave, onLaunch, notify }: { title:string;points:number;setPoints:(n:number)=>void;questions:Question[];setQuestions:(q:Question[])=>void;onBack:()=>void;onSave:()=>void;onLaunch:()=>void;notify:(s:string)=>void }) {
