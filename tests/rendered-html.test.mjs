@@ -36,7 +36,7 @@ test("uses durable rooms and event-driven browser synchronization", async () => 
   assert.match(vite, /CLASSROOM_SESSIONS/);
   assert.match(page, /Image uploaded and ready/);
   assert.match(page, /uploaded-image-preview/);
-  assert.match(page, /onLoad=\{\(\)=>setImageState\("ready"\)\}/);
+  assert.match(page, /onLoad=\{\(\)\s*=>\s*setImageState\("ready"\)\}/);
   assert.match(vite, /new_sqlite_classes/);
   assert.match(worker, /idFromName\(`session:\$\{code\}`\)/);
   assert.match(session, /acceptWebSocket/);
@@ -93,8 +93,11 @@ test("uses durable rooms and event-driven browser synchronization", async () => 
   assert.match(worker, /caches\.default\.match/);
   assert.match(worker, /QUIZ_IMAGES\.delete/);
   assert.match(page, /optimizeQuizImage/);
-  assert.match(page, /targetBytes=440\*1024/);
-  assert.match(page, /dimensionScale\*=\.82/);
+  assert.match(page, /targetBytes: 48 \* 1024/);
+  assert.match(page, /targetBytes: 96 \* 1024/);
+  assert.match(page, /Maximum compression/);
+  assert.match(page, /useState<ImageCompressionMode>\("balanced"\)/);
+  assert.match(page, /dimensionScale\s*\*=\s*0\.82/);
   assert.match(page, /cleanupStoredImages/);
   assert.match(page, /onImageReady/);
   assert.match(page, /You can start now/);
