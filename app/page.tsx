@@ -892,6 +892,46 @@ export default function PulseClass() {
     if (editingActivityId === activity.id) setEditingActivityId("");
     setToast("Activity deleted");
   };
+  const renameActivity = (activity: ActivityRecord, title: string) => {
+    const cleanTitle = title.trim();
+    if (!cleanTitle) {
+      setToast("Activity name cannot be empty");
+      return;
+    }
+    const next = activities.map((item) =>
+      item.id === activity.id ? { ...item, title: cleanTitle } : item,
+    );
+    setActivities(next);
+    if (editingActivityId === activity.id) setActivityTitle(cleanTitle);
+    window.localStorage.setItem("pulseclass-activities", JSON.stringify(next));
+    publishCatalog({ action: "catalog", classes, activities: next });
+    setToast("Activity renamed");
+  };
+  const renameClass = (cls: ClassRecord, name: string) => {
+    const cleanName = name.trim();
+    if (!cleanName) {
+      setToast("Class name cannot be empty");
+      return;
+    }
+    if (
+      classes.some(
+        (item) =>
+          item.id !== cls.id &&
+          item.name.toLowerCase() === cleanName.toLowerCase(),
+      )
+    ) {
+      setToast("A class with this name already exists");
+      return;
+    }
+    const next = classes.map((item) =>
+      item.id === cls.id ? { ...item, name: cleanName } : item,
+    );
+    setClasses(next);
+    if (activeClassId === cls.id) setClassName(cleanName);
+    window.localStorage.setItem("pulseclass-classes", JSON.stringify(next));
+    publishCatalog({ action: "catalog", classes: next, activities });
+    setToast("Class renamed");
+  };
   const deleteClass = (cls: ClassRecord) => {
     const removed = activities.filter((a) => a.classId === cls.id);
     const count = removed.length;
@@ -1514,6 +1554,8 @@ export default function PulseClass() {
                 onTogglePresenter={togglePresenterActivity}
                 onDeleteActivity={deleteActivity}
                 onDeleteClass={() => deleteClass(activeClass)}
+                onRenameClass={(name) => renameClass(activeClass, name)}
+                onRenameActivity={renameActivity}
               />
             )}
             {view === "reports" && (
@@ -2367,6 +2409,8 @@ function ClassDetailPage({
   onTogglePresenter,
   onDeleteActivity,
   onDeleteClass,
+  onRenameClass,
+  onRenameActivity,
 }: {
   cls: ClassRecord;
   activities: ActivityRecord[];
@@ -2377,7 +2421,12 @@ function ClassDetailPage({
   onTogglePresenter: (a: ActivityRecord) => void;
   onDeleteActivity: (a: ActivityRecord) => void;
   onDeleteClass: () => void;
+  onRenameClass: (name: string) => void;
+  onRenameActivity: (activity: ActivityRecord, title: string) => void;
 }) {
+  const [renameTarget, setRenameTarget] = useState<
+    { type: "class"; name: string } | { type: "activity"; activity: ActivityRecord; name: string } | null
+  >(null);
   const sorted = [...activities].sort(
     (a, b) =>
       Number(b.id.split("-").pop() || 0) - Number(a.id.split("-").pop() || 0),
@@ -2398,6 +2447,13 @@ function ClassDetailPage({
           </span>
         </div>
         <div className="class-head-actions">
+          <button
+            className="secondary"
+            onClick={() => setRenameTarget({ type: "class", name: cls.name })}
+          >
+            <FileText />
+            Rename class
+          </button>
           <button className="danger-button" onClick={onDeleteClass}>
             <Trash2 />
             Delete class
@@ -2459,6 +2515,14 @@ function ClassDetailPage({
               >
                 <Trash2 />
               </button>
+              <button
+                className="secondary"
+                onClick={() =>
+                  setRenameTarget({ type: "activity", activity, name: activity.title })
+                }
+              >
+                Rename
+              </button>
               <button className="secondary" onClick={() => onEdit(activity)}>
                 Edit
               </button>
@@ -2487,6 +2551,25 @@ function ClassDetailPage({
             </button>
           </div>
         </section>
+      )}
+      {renameTarget && (
+        <div className="rename-modal" role="dialog" aria-modal="true" aria-label={`Rename ${renameTarget.type}`}>
+          <button className="rename-backdrop" aria-label="Cancel rename" onClick={() => setRenameTarget(null)} />
+          <form
+            onSubmit={(event) => {
+              event.preventDefault();
+              if (!renameTarget.name.trim()) return;
+              if (renameTarget.type === "class") onRenameClass(renameTarget.name);
+              else onRenameActivity(renameTarget.activity, renameTarget.name);
+              setRenameTarget(null);
+            }}
+          >
+            <header><div><small>{renameTarget.type === "class" ? "CLASS SETTINGS" : "ACTIVITY SETTINGS"}</small><h2>Rename {renameTarget.type}</h2></div><button type="button" onClick={() => setRenameTarget(null)} aria-label="Close"><X /></button></header>
+            <label>{renameTarget.type === "class" ? "CLASS NAME" : "ACTIVITY TITLE"}<input autoFocus maxLength={80} value={renameTarget.name} onChange={(event) => setRenameTarget({ ...renameTarget, name: event.target.value })} /></label>
+            <p>The updated name will appear everywhere this {renameTarget.type} is used.</p>
+            <footer><button type="button" className="secondary" onClick={() => setRenameTarget(null)}>Cancel</button><button className="primary" disabled={!renameTarget.name.trim()}>Save name</button></footer>
+          </form>
+        </div>
       )}
     </div>
   );
