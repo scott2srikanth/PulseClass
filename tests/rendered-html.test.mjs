@@ -34,6 +34,9 @@ test("uses durable rooms and event-driven browser synchronization", async () => 
   ]);
 
   assert.match(vite, /CLASSROOM_SESSIONS/);
+  assert.match(page, /Image uploaded and ready/);
+  assert.match(page, /uploaded-image-preview/);
+  assert.match(page, /onLoad=\{\(\)=>setImageState\("ready"\)\}/);
   assert.match(vite, /new_sqlite_classes/);
   assert.match(worker, /idFromName\(`session:\$\{code\}`\)/);
   assert.match(session, /acceptWebSocket/);

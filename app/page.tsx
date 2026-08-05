@@ -328,7 +328,10 @@ function CreateQuiz({ title, points, setPoints, questions, setQuestions, onBack,
 }
 
 function QuestionMedia({question,compact=false}:{question:Question;compact?:boolean}) {
+  const [imageState,setImageState]=useState<"checking"|"ready"|"error">("checking");
+  useEffect(()=>setImageState("checking"),[question.imageUrl]);
   if(question.type==="code"&&question.code) return <figure className={`question-code ${compact?'compact':''}`}><figcaption>{question.language||"Code"}</figcaption><pre><code>{question.code}</code></pre></figure>;
+  if(question.type==="image"&&compact&&question.imageUrl) return <section className={`uploaded-image-preview ${imageState}`}><header><span>{imageState==="ready"?<Check/>:imageState==="error"?<X/>:<Clock3/>}<span><b>{imageState==="ready"?"Image uploaded and ready":imageState==="error"?"Image could not be loaded":"Verifying image…"}</b><small>{imageState==="ready"?"This is the image students will see.":imageState==="error"?"Replace the upload or check that the image URL is public.":"Checking the student-facing preview."}</small></span></span></header><div className="uploaded-image-frame"><img src={question.imageUrl} alt={question.alt||question.imagePrompt||question.prompt} onLoad={()=>setImageState("ready")} onError={()=>setImageState("error")}/></div><footer><span><Check/> Optimized image preview</span><small>Click Save to keep this image with the activity.</small></footer></section>;
   if(question.type==="image") return <figure className={`question-image ${compact?'compact':''}`}>{question.imageUrl?<img src={question.imageUrl} alt={question.alt||question.imagePrompt||question.prompt}/>:<div><FileText/><b>Image required</b><span>{question.imagePrompt||"Add an image URL in the activity editor."}</span></div>}{question.alt&&<figcaption>{question.alt}</figcaption>}</figure>;
   return null;
 }
