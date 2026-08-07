@@ -104,6 +104,10 @@ test("uses durable rooms and event-driven browser synchronization", async () => 
   assert.match(page, /onRenameActivity/);
   assert.match(page, /Activity renamed/);
   assert.match(page, /Class renamed/);
+  assert.match(page, /Export CSV/);
+  assert.match(page, /text\/csv;charset=utf-8/);
+  assert.match(page, /Rank.*Roll number.*Student name.*Points/s);
+  assert.match(page, /URL\.revokeObjectURL/);
   assert.match(page, /useState<ImageCompressionMode>\("balanced"\)/);
   assert.match(page, /dimensionScale\s*\*=\s*0\.82/);
   assert.match(page, /cleanupStoredImages/);

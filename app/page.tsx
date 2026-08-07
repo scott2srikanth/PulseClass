@@ -5341,6 +5341,38 @@ function LeaderboardReport({
   const overallRows = Object.values(classScores).sort(
     (a, b) => b.points - a.points,
   );
+  const exportCsv = (
+    label: string,
+    rows: Array<{ name: string; roll: string; points: number }>,
+  ) => {
+    const safeCell = (value: string | number) => {
+      let text = String(value);
+      if (/^[=+\-@]/.test(text)) text = `'${text}`;
+      return `"${text.replace(/"/g, '""')}"`;
+    };
+    const csv = [
+      ["Rank", "Roll number", "Student name", "Points"],
+      ...rows.map((student, index) => [
+        index + 1,
+        student.roll || "Not provided",
+        student.name,
+        student.points,
+      ]),
+    ]
+      .map((row) => row.map(safeCell).join(","))
+      .join("\r\n");
+    const blob = new Blob(["\ufeff", csv], { type: "text/csv;charset=utf-8" });
+    const url = URL.createObjectURL(blob);
+    const link = document.createElement("a");
+    const filePart = (value: string) =>
+      value.trim().replace(/[^a-z0-9]+/gi, "-").replace(/^-|-$/g, "").toLowerCase() || "report";
+    link.href = url;
+    link.download = `${filePart(className)}-${filePart(title)}-${filePart(label)}.csv`;
+    document.body.appendChild(link);
+    link.click();
+    link.remove();
+    URL.revokeObjectURL(url);
+  };
   const Board = ({
     id,
     label,
@@ -5360,12 +5392,24 @@ function LeaderboardReport({
           <h2>{label}</h2>
           <p>{detail}</p>
         </div>
-        <button
-          onClick={() => setFullscreen(fullscreen === id ? null : id)}
-          aria-label={`Toggle ${label} fullscreen`}
-        >
-          {fullscreen === id ? <Minimize2 /> : <Maximize2 />}
-        </button>
+        <div className="result-board-actions">
+          <button
+            className="export-csv"
+            onClick={() => exportCsv(label, rows)}
+            disabled={!rows.length}
+            aria-label={`Export ${label} as CSV`}
+            title={`Export ${label} as CSV`}
+          >
+            <FileText />
+            <span>Export CSV</span>
+          </button>
+          <button
+            onClick={() => setFullscreen(fullscreen === id ? null : id)}
+            aria-label={`Toggle ${label} fullscreen`}
+          >
+            {fullscreen === id ? <Minimize2 /> : <Maximize2 />}
+          </button>
+        </div>
       </header>
       <div className="result-columns">
         <span>Rank</span>
