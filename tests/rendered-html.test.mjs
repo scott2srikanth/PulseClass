@@ -108,6 +108,11 @@ test("uses durable rooms and event-driven browser synchronization", async () => 
   assert.match(page, /text\/csv;charset=utf-8/);
   assert.match(page, /Rank.*Roll number.*Student name.*Points/s);
   assert.match(page, /URL\.revokeObjectURL/);
+  assert.match(page, /serverOffset/);
+  assert.match(page, /Date\.now\(\) \+ serverOffset/);
+  assert.match(page, /ThemeToggle theme=\{theme\} onToggle=\{onTheme\}/);
+  assert.match(session, /serverNow: Date\.now\(\)/);
+  assert.match(page, /board-fullscreen/);
   assert.match(page, /useState<ImageCompressionMode>\("balanced"\)/);
   assert.match(page, /dimensionScale\s*\*=\s*0\.82/);
   assert.match(page, /cleanupStoredImages/);

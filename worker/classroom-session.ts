@@ -203,9 +203,10 @@ export class ClassroomSession {
   }
 
   private publicState(role: "student" | "host") {
-    if (role === "host") return this.session;
+    if (role === "host") return { ...this.session, serverNow: Date.now() };
     return {
       ...this.session,
+      serverNow: Date.now(),
       responses: {},
       imageReady: {},
       scores: this.session.finished ? this.session.scores : {},
@@ -385,7 +386,7 @@ export class ClassroomSession {
   }
 
   private async broadcastPatch(patch: Record<string, unknown>) {
-    const message = JSON.stringify({ type: "session:update", revision: this.session.revision, patch });
+    const message = JSON.stringify({ type: "session:update", revision: this.session.revision, patch: { ...patch, serverNow: Date.now() } });
     for (const socket of this.state.getWebSockets()) this.safeSend(socket, message, true);
   }
 

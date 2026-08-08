@@ -230,6 +230,7 @@ export default function PulseClass() {
   >({});
   const [liveStudentCount, setLiveStudentCount] = useState(0);
   const [timerEnd, setTimerEnd] = useState(0);
+  const [serverNow, setServerNow] = useState(0);
   const [sessionFinished, setSessionFinished] = useState(false);
   const [sessionScores, setSessionScores] = useState<Record<string, number>>(
     {},
@@ -540,6 +541,7 @@ export default function PulseClass() {
           }
           if ("results" in data) setSessionResults(data.results || []);
           if ("timerEnd" in data) setTimerEnd(Number(data.timerEnd || 0));
+          if ("serverNow" in data) setServerNow(Number(data.serverNow || 0));
           if ("responses" in data) {
             setLiveResponseMap(data.responses || {});
             setLiveResponses(Object.values(data.responses || {}).map(Number));
@@ -1272,6 +1274,7 @@ export default function PulseClass() {
           questions={questions}
           current={activeQuestion}
           timerEnd={timerEnd}
+          serverNow={serverNow}
           sessionStarted={sessionStarted}
           sessionFinished={sessionFinished}
           points={
@@ -1295,6 +1298,8 @@ export default function PulseClass() {
             })
           }
           teacherPreview={studentFromHost}
+          theme={theme}
+          onTheme={toggleTheme}
           onExit={() => {
             if (studentFromHost) {
               go("host");
@@ -4899,6 +4904,7 @@ function StudentView({
   questions,
   current,
   timerEnd,
+  serverNow,
   sessionStarted,
   sessionFinished,
   points,
@@ -4909,6 +4915,8 @@ function StudentView({
   onResponse,
   onImageReady,
   teacherPreview,
+  theme,
+  onTheme,
   onExit,
 }: {
   initialSessionCode: string;
@@ -4925,6 +4933,7 @@ function StudentView({
   questions: Question[];
   current: number;
   timerEnd: number;
+  serverNow: number;
   sessionStarted: boolean;
   sessionFinished: boolean;
   points: number;
@@ -4935,6 +4944,8 @@ function StudentView({
   onResponse: (n: number) => void;
   onImageReady: (n: number) => void;
   teacherPreview: boolean;
+  theme: "light" | "dark";
+  onTheme: () => void;
   onExit: () => void;
 }) {
   const [sessionCode, setSessionCode] = useState(
@@ -4942,6 +4953,7 @@ function StudentView({
   );
   const [joinError, setJoinError] = useState("");
   const [remaining, setRemaining] = useState(0);
+  const [serverOffset, setServerOffset] = useState(0);
   const [answerHistory, setAnswerHistory] = useState<Record<number, number>>(
     () => {
       if (typeof window === "undefined") return {};
@@ -4977,12 +4989,17 @@ function StudentView({
     };
   }, [joined, questions, expectedSessionCode]);
   useEffect(() => {
+    if (serverNow) setServerOffset(serverNow - Date.now());
+  }, [serverNow]);
+  useEffect(() => {
     const update = () =>
-      setRemaining(Math.max(0, Math.ceil((timerEnd - Date.now()) / 1000)));
+      setRemaining(
+        Math.max(0, Math.ceil((timerEnd - (Date.now() + serverOffset)) / 1000)),
+      );
     update();
     const timer = window.setInterval(update, 250);
     return () => window.clearInterval(timer);
-  }, [timerEnd]);
+  }, [timerEnd, serverOffset]);
   if (!joined)
     return (
       <div className="student-join">
@@ -5189,6 +5206,7 @@ function StudentView({
         <span>
           <i /> LIVE
         </span>
+        <ThemeToggle theme={theme} onToggle={onTheme} />
         <b>
           {nickname || "Student"} · {points.toLocaleString()} pts
         </b>
